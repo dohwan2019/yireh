@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>이레 수학 초6</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,500;0,600;1,500&family=Nanum+Pen+Script&display=swap">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>window.QUIZ_CONFIG = {"subject":"math","grade":"e6","title":"이레 수학","period":"week","math":true,"speech":false,"eyebrow":"학년별 수학 · 일반 / 성경 속 수학","lead":"매주 월요일 새 문제가 나와요. 바로 채점하고, 틀린 문제는 오답노트에 모입니다.","footer":"숫자 키 1~5로 보기 선택, Enter로 다음 문제 · 성경 속 수학의 1규빗은 약 45cm로 계산해요"};</script>
+<script>
+window.MathJax = { tex: { inlineMath: [['$', '$']] }, svg: { fontCache: 'global' },
+  startup: { typeset: false, ready() { MathJax.startup.defaultReady(); MathJax.startup.promise.then(() => window.IRAE_READY && window.IRAE_READY()); } } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" async></script>
+<script src="../data/math-e6.js"></script>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

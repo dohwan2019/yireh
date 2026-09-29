@@ -1,0 +1,180 @@
+/* 이레 공통 디자인 */
+:root{
+  --paper:#F6F8FB; --grid:#E3E9F1; --card:#FFFFFF; --ink:#18212E; --muted:#5A6576;
+  --line:#D6DEE8; --pen:#D2372A; --pen-soft:#FCEAE7; --sel:#2B4C8C; --sel-soft:#E8EDF7;
+  --btn-ink:#FFFFFF;
+  --body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --en:"IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --hand:"Nanum Pen Script", "IBM Plex Sans KR", cursive;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#10151D; --grid:#18202A; --card:#161D27; --ink:#E4EAF2; --muted:#98A4B5;
+    --line:#2A3441; --pen:#FF6B5D; --pen-soft:#3A201D; --sel:#93B2F0; --sel-soft:#1C283C;
+    --btn-ink:#10151D;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#10151D; --grid:#18202A; --card:#161D27; --ink:#E4EAF2; --muted:#98A4B5;
+  --line:#2A3441; --pen:#FF6B5D; --pen-soft:#3A201D; --sel:#93B2F0; --sel-soft:#1C283C;
+  --btn-ink:#10151D;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:var(--body); color:var(--ink); background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px; font-size:16px; line-height:1.6;
+  padding-inline:16px; padding-block:24px 48px; min-height:100vh;
+}
+body.lined{background-image:linear-gradient(var(--grid) 1px,transparent 1px); background-size:100% 28px}
+.wrap{max-width:680px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+a{color:var(--sel)}
+header{display:flex; flex-direction:column; gap:4px}
+.home{font-size:14px; text-decoration:none; font-weight:500; align-self:flex-start}
+.eyebrow{font-size:13px; letter-spacing:.06em; color:var(--muted); font-weight:500}
+h1{font-family:var(--hand); font-weight:400; font-size:48px; line-height:1.05; margin:0; text-wrap:balance}
+.lead{margin:0; color:var(--muted); font-size:15px}
+
+/* 학년·과정 선택 */
+.picker{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; display:grid; gap:10px}
+.pick-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.pick-row .lbl{font-size:13px; color:var(--muted); width:40px; flex:none; font-weight:500}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.seg button{font:inherit; font-size:14px; font-weight:500; border:0; background:transparent; color:var(--ink); padding:6px 14px; cursor:pointer}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--card)}
+.seg.track button[aria-pressed="true"][data-track="bible"]{background:var(--pen); color:#fff}
+
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{
+  font:inherit; font-size:14px; font-weight:500; color:var(--ink); background:var(--card);
+  border:1px solid var(--line); border-radius:999px; padding:6px 14px; cursor:pointer;
+}
+.chip:hover{border-color:var(--sel)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--card); border-color:var(--ink)}
+.chip .n{font-size:12px; opacity:.7; margin-left:4px; font-variant-numeric:tabular-nums}
+.grade .chip{min-width:44px; text-align:center; padding-inline:10px}
+
+.day{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.day .date{font-size:20px; font-weight:600; font-variant-numeric:tabular-nums}
+.day .sub{flex-basis:100%; color:var(--muted); font-size:15px; margin:0}
+.nav{
+  font:inherit; width:34px; height:34px; border-radius:50%; border:1px solid var(--line);
+  background:var(--card); color:var(--ink); cursor:pointer; font-size:14px;
+}
+.nav:disabled{opacity:.35; cursor:default}
+.badge{font-size:13px; border:1px solid var(--pen); color:var(--pen); border-radius:999px; padding:1px 10px; font-weight:500}
+.streak{font-family:var(--hand); font-size:24px; color:var(--pen); margin-left:auto}
+
+.dots{display:flex; flex-wrap:wrap; gap:6px}
+.dot{
+  width:28px; height:28px; border-radius:50%; border:1px solid var(--line); background:var(--card);
+  font-size:12px; display:grid; place-items:center; color:var(--muted); position:relative;
+  font-variant-numeric:tabular-nums;
+}
+.dot.now{border:2px solid var(--sel); color:var(--sel); font-weight:600}
+.dot.ok{border-color:var(--pen); color:var(--pen); font-weight:600}
+.dot.no{background:var(--paper)}
+.dot.no::after{content:""; position:absolute; width:2px; height:30px; background:var(--pen); transform:rotate(40deg); border-radius:2px}
+
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 20px; display:flex; flex-direction:column; gap:18px}
+.qhead{display:flex; gap:14px; align-items:flex-start}
+.qnum{position:relative; flex:none; width:52px; height:52px; display:grid; place-items:center; font-size:24px; font-weight:600; font-variant-numeric:tabular-nums}
+.meta{font-size:13px; color:var(--muted); letter-spacing:.02em; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+.tag{border:1px solid var(--line); border-radius:6px; padding:0 7px; font-size:12px}
+.tag.bible{border-color:var(--pen); color:var(--pen)}
+.qtext{font-size:17px; margin:4px 0 0; word-break:keep-all}
+.head{display:block; font-family:var(--en); font-size:30px; font-weight:600; margin-top:6px; line-height:1.2}
+.pos{font-family:var(--en); font-style:italic; font-size:15px; color:var(--muted); font-weight:500; margin-left:8px}
+.kor{display:block; font-size:24px; font-weight:600; margin-top:6px}
+.sentence{display:block; font-family:var(--en); font-size:19px; font-weight:500; margin-top:8px; line-height:1.55}
+.blank{display:inline-block; min-width:72px; border-bottom:2px solid var(--ink); margin-inline:2px; transform:translateY(-4px)}
+.en{font-family:var(--en); font-weight:500}
+.ref{display:inline-block; font-size:13px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:0 8px; margin-left:4px; vertical-align:middle}
+
+.mark{position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); pointer-events:none; overflow:visible}
+.mark path{fill:none; stroke:var(--pen); stroke-width:4; stroke-linecap:round; stroke-dasharray:1; stroke-dashoffset:1; animation:draw .45s ease-out forwards}
+.mark.small path{stroke-width:6}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+.choices{display:grid; gap:8px; list-style:none; margin:0; padding:0}
+.choices li{display:flex; gap:8px}
+.choice{
+  flex:1; min-width:0; text-align:left; font:inherit; color:var(--ink); background:var(--card);
+  border:1px solid var(--line); border-radius:10px; padding:10px 14px; cursor:pointer;
+  display:flex; gap:12px; align-items:center; min-height:48px;
+}
+.choice:hover:not(:disabled){background:var(--sel-soft); border-color:var(--sel)}
+.choice:disabled{cursor:default}
+.choice .lab{position:relative; flex:none; width:26px; height:26px; display:grid; place-items:center; font-size:18px; color:var(--muted)}
+.choice.right{border-color:var(--pen); background:var(--pen-soft)}
+.choice.right .lab{color:var(--pen)}
+.choice.picked-wrong{color:var(--muted)}
+.choice.dim{opacity:.55}
+
+.short{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.short input{
+  font:inherit; font-size:18px; width:160px; padding:8px 12px; border-radius:10px;
+  border:1px solid var(--line); background:var(--paper); color:var(--ink); font-variant-numeric:tabular-nums;
+}
+.short input:focus-visible{outline:2px solid var(--sel); outline-offset:1px}
+.short .hint{font-size:13px; color:var(--muted); flex-basis:100%}
+
+.say{
+  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  font:inherit; font-size:14px; font-weight:500; color:var(--sel); background:var(--sel-soft);
+  border:1px solid transparent; border-radius:999px; padding:5px 14px 5px 10px; cursor:pointer;
+}
+.say:hover{border-color:var(--sel)}
+.say svg,.say-mini svg{fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+.say svg{width:18px; height:18px}
+.say.playing{background:var(--sel); color:var(--card)}
+.row .say{margin-right:auto; align-self:center}
+.say-mini{
+  flex:none; width:48px; display:grid; place-items:center; cursor:pointer;
+  border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--sel);
+}
+.say-mini:hover{border-color:var(--sel); background:var(--sel-soft)}
+.say-mini svg{width:20px; height:20px}
+.say-mini.playing{background:var(--sel); color:var(--card); border-color:var(--sel)}
+
+.btn{
+  font:inherit; font-weight:600; font-size:15px; border-radius:10px; padding:10px 18px; cursor:pointer;
+  border:1px solid var(--ink); background:var(--ink); color:var(--btn-ink);
+}
+.btn.ghost{background:transparent; color:var(--ink); border-color:var(--line)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--sel); outline-offset:2px}
+
+.verdict{font-family:var(--hand); font-size:32px; line-height:1.1; margin:0}
+.verdict.ok{color:var(--pen)}
+.sol{background:var(--paper); border-radius:10px; padding:14px 16px; font-size:15px; word-break:keep-all}
+.sol .k{display:block; font-size:12px; letter-spacing:.08em; color:var(--muted); font-weight:600; margin-bottom:4px}
+.sol .ko{display:block; margin-top:6px; color:var(--muted)}
+.row{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+
+.score{display:flex; flex-direction:column; align-items:center; gap:4px; padding-block:8px}
+.score .big{position:relative; font-family:var(--hand); font-size:72px; line-height:1; padding:10px 28px; color:var(--pen); font-variant-numeric:tabular-nums}
+.score p{margin:0; color:var(--muted); text-align:center}
+.wrong-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px}
+.wrong-list li{border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:15px; word-break:keep-all}
+.empty{color:var(--muted); margin:0}
+footer{font-size:13px; color:var(--muted); text-align:center}
+mjx-container{color:inherit}
+
+/* 첫 화면 */
+.subjects{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px}
+.subject{
+  display:flex; flex-direction:column; gap:8px; text-decoration:none; color:var(--ink);
+  background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 20px;
+}
+.subject:hover{border-color:var(--sel)}
+.subject .name{font-family:var(--hand); font-size:40px; line-height:1}
+.subject p{margin:0; color:var(--muted); font-size:15px}
+.subject ul{margin:0; padding-left:18px; font-size:14px; color:var(--muted)}
+.subject .go{margin-top:auto; font-weight:600; color:var(--sel); font-size:15px}
+.verse{font-size:14px; color:var(--muted); text-align:center; margin:0}
+
+@media (prefers-reduced-motion: reduce){ .mark path{animation:none; stroke-dashoffset:0} }
+@media (max-width:420px){ h1{font-size:42px} .card{padding:18px 16px} .head{font-size:26px} .pick-row .lbl{width:auto; flex-basis:100%} }
