@@ -72,7 +72,8 @@
   // ── 상태 ──
   let track = load(`track-${CFG.grade}`, 'general');
   if (!DATA[track] || !DATA[track].length) track = DATA.general && DATA.general.length ? 'general' : 'bible';
-  let tab = 'period';            // period | practice | wrong
+  let tab = load(`tabsel-${CFG.grade}`, 'period');   // period | practice | wrong (마지막으로 보던 탭)
+  if (!['period', 'practice', 'wrong'].includes(tab)) tab = 'period';
   let view = THIS_PERIOD;
   let deck = [], idx = 0, results = [], retrying = false;
   const memo = {};
@@ -171,6 +172,8 @@
   function deckSig() { return deck.map(q => q.src).join(','); }
   function stash() {
     memo[stateKey()] = { deck, idx, results, retrying };
+    // 연습·오답노트는 뽑힌 문제까지 통째로 저장해서 새로고침해도 이어서 풀 수 있게 함
+    if (tab !== 'period') save(`tab-${stateKey()}`, { deck, idx, results, retrying });
     if (tab === 'period' && !retrying) {
       const all = load('session', {});
       all[`${poolKey()}|${view}`] = { idx, results, sig: deckSig() };
@@ -188,7 +191,11 @@
   }
 
   function start(fresh = false) {
-    const saved = memo[stateKey()];
+    let saved = memo[stateKey()];
+    if (!fresh && !saved && tab !== 'period') {
+      const s = load(`tab-${stateKey()}`, null);
+      if (s && Array.isArray(s.deck) && s.deck.length) saved = s;
+    }
     if (!fresh && saved && saved.deck.length) {
       ({ deck, idx, results, retrying } = saved);
     } else if (tab === 'period') {
@@ -225,6 +232,108 @@
   function stopSpeech() { if (CAN_SPEAK) window.speechSynthesis.cancel(); }
   function sayButton(text, label) { return CAN_SPEAK ? `<button class="say" type="button" data-say="${esc(text)}">${SPEAKER}${label}</button>` : ''; }
   if (CAN_SPEAK) window.speechSynthesis.getVoices();
+
+  // ── 연습장 (손으로 풀어 보기) ──
+  // 문제마다 그림을 따로 기억함. 페이지를 닫으면 지워짐 (그림은 용량이 커서 저장하지 않음)
+  const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>';
+  const scratchStore = new Map();
+  let pad = null;
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#18212E'; }
+  function buildPad() {
+    const back = document.createElement('div');
+    back.className = 'sheet-backdrop'; back.hidden = true; back.dataset.act = 'scratch-close';
+    const sheet = document.createElement('section');
+    sheet.className = 'sheet'; sheet.hidden = true;
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-label', '연습장');
+    sheet.innerHTML = `
+      <div class="sheet-bar">
+        <span class="title">연습장</span>
+        <button class="tool" type="button" data-tool="ink" aria-pressed="true" aria-label="검은 펜"><span class="swatch"></span></button>
+        <button class="tool" type="button" data-tool="red" aria-pressed="false" aria-label="빨간 펜"><span class="swatch red"></span></button>
+        <button class="tool" type="button" data-tool="erase" aria-pressed="false">지우개</button>
+        <button class="tool" type="button" data-act="scratch-undo">되돌리기</button>
+        <button class="tool" type="button" data-act="scratch-clear">모두 지우기</button>
+        <button class="tool close" type="button" data-act="scratch-close">닫기</button>
+      </div>
+      <div class="sheet-q"></div>
+      <div class="pad-wrap"><canvas class="pad"></canvas><p class="pad-hint">손가락이나 펜으로 풀어 보세요</p></div>`;
+    document.body.append(back, sheet);
+    const canvas = sheet.querySelector('canvas');
+    pad = { back, sheet, canvas, ctx: canvas.getContext('2d'), hint: sheet.querySelector('.pad-hint'), qEl: sheet.querySelector('.sheet-q'),
+      strokes: [], tool: 'ink', cur: null, penSeen: false };
+    const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    canvas.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.pointerType === 'pen') pad.penSeen = true;
+      if (e.pointerType === 'touch' && pad.penSeen) return; // 펜을 쓰는 중이면 손바닥 터치는 무시
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      pad.cur = { tool: pad.tool, pts: [pos(e)] };
+      pad.strokes.push(pad.cur);
+      drawStroke(pad.cur, 0);
+      pad.hint.hidden = true;
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!pad.cur) return;
+      const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const from = pad.cur.pts.length - 1;
+      for (const ev of events) pad.cur.pts.push(pos(ev));
+      drawStroke(pad.cur, from);
+    });
+    const end = () => { pad.cur = null; };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    window.addEventListener('resize', () => { if (!pad.sheet.hidden) sizePad(); });
+  }
+  function drawStroke(s, from) {
+    const { ctx } = pad;
+    ctx.save();
+    ctx.globalCompositeOperation = s.tool === 'erase' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = ctx.fillStyle = s.tool === 'red' ? cssVar('--pen') : cssVar('--ink');
+    ctx.lineWidth = s.tool === 'erase' ? 24 : 2.6;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const p = s.pts;
+    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); }
+    else {
+      ctx.beginPath();
+      ctx.moveTo(p[Math.max(0, from)][0], p[Math.max(0, from)][1]);
+      for (let i = Math.max(1, from + 1); i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function redrawPad() {
+    const { ctx, canvas } = pad;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore();
+    for (const s of pad.strokes) drawStroke(s, 0);
+    pad.hint.hidden = pad.strokes.length > 0;
+  }
+  function sizePad() {
+    const r = pad.canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    pad.canvas.width = Math.round(r.width * dpr); pad.canvas.height = Math.round(r.height * dpr);
+    pad.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawPad();
+  }
+  function openScratch() {
+    const q = deck.at(idx);
+    if (!q) return;
+    if (!pad) buildPad();
+    if (!scratchStore.has(q.src)) scratchStore.set(q.src, []);
+    pad.strokes = scratchStore.get(q.src);
+    pad.qEl.innerHTML = `<strong>${idx + 1}.</strong> ${q.q}${q.type === 'mc' ? `<ol>${q.choices.map((c, i) => `<li>${LABELS.at(i)} ${c}</li>`).join('')}</ol>` : ''}`;
+    pad.back.hidden = false; pad.sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sizePad();
+    typeset(pad.qEl);
+    pad.sheet.querySelector('.close').focus({ preventScroll: true });
+  }
+  function closeScratch() {
+    if (!pad || pad.sheet.hidden) return;
+    pad.back.hidden = true; pad.sheet.hidden = true; pad.cur = null;
+    document.body.classList.remove('sheet-open');
+    const b = $('.scratch-btn'); if (b) b.focus({ preventScroll: true });
+  }
+  const scratchOpen = () => pad && !pad.sheet.hidden;
 
   // ── 화면 ──
   function mark(kind, small) {
@@ -279,8 +388,10 @@
     }
     stage.innerHTML = idx < deck.length ? questionHTML(deck.at(idx)) : summaryHTML();
     typeset(stage);
+    // 키보드가 있는 PC에서만 입력칸에 바로 커서를 둠. 휴대폰은 자판이 문제를 가리므로 학생이 입력칸을 누를 때 열리게 함
     const inp = $('#short-answer');
-    if (inp && !results.at(idx)) inp.focus({ preventScroll: true });
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (inp && !results.at(idx) && !touch) inp.focus({ preventScroll: true });
   }
   function renderAll() { renderPicker(); renderTabs(); renderDay(); renderStage(); }
 
@@ -303,7 +414,7 @@
       body = `<form class="short" id="short-form">
         <label for="short-answer" class="hint">답을 숫자로 입력하세요</label>
         <input id="short-answer" inputmode="decimal" autocomplete="off" ${done ? `value="${esc(res.picked)}" disabled` : ''}>
-        ${done ? '' : '<button class="btn" type="submit">확인</button>'}
+        ${done ? '' : '<button class="btn ghost" type="button" data-act="neg" aria-label="음수 부호 넣기/빼기">±</button><button class="btn" type="submit">확인</button>'}
       </form>`;
     }
     const last = idx === deck.length - 1;
@@ -318,7 +429,7 @@
         <div class="qnum">${idx + 1}${done ? mark(res.correct ? 'ok' : 'no') : ''}</div>
         <div><div class="meta">${meta}</div><p class="qtext">${q.q}</p></div>
       </div>
-      ${q.say ? sayButton(q.say, '발음 듣기') : ''}
+      <div class="tools-row">${q.say ? sayButton(q.say, '발음 듣기') : ''}<button class="scratch-btn" type="button" data-act="scratch">${PENCIL}연습장</button></div>
       ${body}
       ${feedback}
     </article>`;
@@ -363,25 +474,41 @@
     renderTabs(); renderDay(); renderStage();
     const nb = $('#next-btn'); if (nb) nb.focus({ preventScroll: true });
   }
-  function next() { stopSpeech(); idx += 1; stash(); renderStage(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function next() { stopSpeech(); closeScratch(); idx += 1; stash(); renderStage(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
   document.addEventListener('click', e => {
+    const tool = e.target.closest('[data-tool]');
+    if (tool && pad) {
+      pad.tool = tool.dataset.tool;
+      pad.sheet.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b === tool)));
+      return;
+    }
+    const sa = e.target.closest('[data-act]') && e.target.closest('[data-act]').dataset.act;
+    if (sa === 'scratch') { openScratch(); return; }
+    if (sa === 'scratch-close') { closeScratch(); return; }
+    if (sa === 'scratch-undo') { if (pad) { pad.strokes.pop(); redrawPad(); } return; }
+    if (sa === 'scratch-clear') { if (pad) { pad.strokes.length = 0; redrawPad(); } return; }
     const say = e.target.closest('[data-say]');
     if (say) { speak(say.dataset.say, say); return; }
     const tr = e.target.closest('[data-track]');
     if (tr) {
       if (tr.dataset.track === track) return;
-      stopSpeech(); track = tr.dataset.track; save(`track-${CFG.grade}`, track); tab = 'period'; view = THIS_PERIOD; start(); return;
+      stopSpeech(); track = tr.dataset.track; save(`track-${CFG.grade}`, track); tab = 'period'; save(`tabsel-${CFG.grade}`, tab); view = THIS_PERIOD; start(); return;
     }
     const tb = e.target.closest('[data-tab]');
     if (tb) {
       if (tb.dataset.tab === tab && (tab !== 'period' || view === THIS_PERIOD)) return;
-      stopSpeech(); tab = tb.dataset.tab; view = THIS_PERIOD; start(); return;
+      stopSpeech(); tab = tb.dataset.tab; save(`tabsel-${CFG.grade}`, tab); view = THIS_PERIOD; start(); return;
     }
     const pick = e.target.closest('[data-pick]');
     if (pick && !pick.disabled) { answer(Number(pick.dataset.pick)); return; }
     const act = e.target.closest('[data-act]') && e.target.closest('[data-act]').dataset.act;
     if (act === 'next') next();
+    if (act === 'neg') {
+      // 휴대폰 숫자 키패드에는 − 키가 없는 경우가 많아서 버튼으로 부호를 바꿈
+      const inp = $('#short-answer');
+      if (inp) { inp.value = inp.value.startsWith('-') ? inp.value.slice(1) : '-' + inp.value; }
+    }
     if (act === 'restart') start(true);
     if (act === 'prev') { view = addDays(view, -STEP); start(); }
     if (act === 'next-period' && view < THIS_PERIOD) { view = addDays(view, STEP); start(); }
@@ -396,6 +523,7 @@
     answer($('#short-answer').value);
   });
   document.addEventListener('keydown', e => {
+    if (scratchOpen()) { if (e.key === 'Escape') closeScratch(); return; }
     if (e.target.tagName === 'INPUT') return;
     const q = deck.at(idx);
     if (!q) return;

@@ -163,6 +163,47 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--sel); outline-offse
 footer{font-size:13px; color:var(--muted); text-align:center}
 mjx-container{color:inherit}
 
+/* 연습장 */
+.tools-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.scratch-btn{
+  display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:14px; font-weight:500;
+  color:var(--ink); background:var(--paper); border:1px dashed var(--muted); border-radius:999px;
+  padding:5px 14px 5px 10px; cursor:pointer;
+}
+.scratch-btn:hover{border-style:solid; border-color:var(--sel); color:var(--sel)}
+.scratch-btn svg,.sheet-bar svg{width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+.sheet-backdrop{position:fixed; inset:0; background:rgba(10,14,20,.35); z-index:40}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:41; margin:0 auto; max-width:760px;
+  height:78vh; height:78dvh; display:flex; flex-direction:column;
+  background:var(--card); border:1px solid var(--line); border-bottom:0; border-radius:16px 16px 0 0;
+  box-shadow:0 -8px 24px rgba(0,0,0,.18); padding-bottom:env(safe-area-inset-bottom, 0px);
+}
+.sheet-bar{display:flex; align-items:center; gap:6px; padding:10px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.sheet-bar .title{font-family:var(--hand); font-size:26px; line-height:1; margin-right:auto; padding-left:4px}
+.tool{
+  display:inline-grid; place-items:center; min-width:40px; height:36px; padding:0 8px; font:inherit; font-size:13px;
+  border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); cursor:pointer;
+}
+.tool[aria-pressed="true"]{border-color:var(--ink); background:var(--ink); color:var(--card)}
+.tool .swatch{width:16px; height:16px; border-radius:50%; background:var(--ink); display:block}
+.tool .swatch.red{background:var(--pen)}
+.tool[aria-pressed="true"] .swatch{box-shadow:0 0 0 2px var(--card)}
+.tool.close{font-weight:600}
+.sheet-q{max-height:26%; overflow:auto; padding:10px 16px; font-size:15px; border-bottom:1px solid var(--line); background:var(--paper); word-break:keep-all}
+.sheet-q .head,.sheet-q .kor{font-size:20px}
+.sheet-q .sentence{font-size:16px}
+.sheet-q ol{margin:6px 0 0; padding-left:0; list-style:none; display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--muted)}
+.pad-wrap{position:relative; flex:1; min-height:0}
+.pad{
+  position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; display:block;
+  background-color:var(--card);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+.pad-hint{position:absolute; left:0; right:0; top:40%; text-align:center; color:var(--muted); font-size:14px; pointer-events:none}
+body.sheet-open{overflow:hidden}
+
 /* 첫 화면 */
 .subjects{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px}
 .subject{
