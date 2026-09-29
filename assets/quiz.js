@@ -283,6 +283,12 @@
     const end = () => { pad.cur = null; };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
+    // 휴대폰 기본 동작(길게 눌러 선택·메뉴, 화면 끌기)을 막음
+    const stop = e => { if (e.cancelable) e.preventDefault(); };
+    canvas.addEventListener('touchstart', stop, { passive: false });
+    canvas.addEventListener('touchmove', stop, { passive: false });
+    sheet.addEventListener('contextmenu', stop);
+    sheet.addEventListener('selectstart', stop);
     window.addEventListener('resize', () => { if (!pad.sheet.hidden) sizePad(); });
   }
   function drawStroke(s, from) {
