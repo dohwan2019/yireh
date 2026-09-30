@@ -19,7 +19,7 @@
   const HW_SETS = HW ? ((window.HOMEWORK && window.HOMEWORK.sets) || []).filter(s => s && s.id && Array.isArray(s.questions) && s.questions.length) : [];
   const DATA = window.QUIZ_DATA || { general: [], bible: [] };
   const GRADE_LABEL = { e1:'초1', e2:'초2', e3:'초3', e4:'초4', e5:'초5', e6:'초6', m1:'중1', m2:'중2', m3:'중3', h1:'고1', h2:'고2', h3:'고3' };
-  const TRACK_LABEL = { s1: '1학기', s2: '2학기', general: '전체', bible: '성경' };
+  const TRACK_LABEL = { s1: '1학기', s2: '2학기', elem: '초등', mid: '중등', high: '고등', general: '전체', bible: '성경' };
   const POS = { v: 'v.', a: 'adj.', n: 'n.', ad: 'adv.' };
   const POS_KO = { v: '동사', a: '형용사', n: '명사', ad: '부사' };
   const LABELS = ['①', '②', '③', '④', '⑤'];
@@ -45,7 +45,9 @@
   }
   const STEP = WEEK ? 7 : 1;
   const THIS_PERIOD = WEEK ? mondayOf(kstToday()) : kstToday();
-  const EPOCH = WEEK ? '2025-12-29' : '2026-01-01';
+  // CFG.start: 이 날짜부터 시작 (이레 영어는 첫날부터 날마다 새 세트). 그 전 날짜로는 넘어가지 않음
+  const START = CFG.start || '';
+  const EPOCH = START || (WEEK ? '2025-12-29' : '2026-01-01');
   function periodIndex(p) { return Math.round((toUTC(p) - toUTC(EPOCH)) / (STEP * 864e5)); }
 
   // ── 날짜로 정해지는 난수 ──
@@ -75,7 +77,7 @@
   // ── 상태 ──
   const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric' }).format(new Date()));
   const nowSem = month >= 3 && month <= 8 ? 's1' : 's2';
-  let track = load(`track-${CFG.grade}`, nowSem);
+  let track = load(`track-${CFG.grade || 'level'}`, CFG.defaultTrack || nowSem);
   if (!DATA[track] || !DATA[track].length) track = Object.keys(TRACK_LABEL).find(k => (DATA[k] || []).length) || 's1';
   let tab = load(`tabsel-${CFG.grade}`, 'period');   // period | practice | wrong (마지막으로 보던 탭)
   if (!['period', 'practice', 'wrong'].includes(tab)) tab = 'period';
@@ -90,8 +92,9 @@
   const revealed = new Set();   // 서술형: 정답을 펼쳐 본 문제
   const pool = () => HW ? (hwSet() ? hwSet().questions : []) : (DATA[track] || []);
   const poolKey = () => HW ? `hw-${hwId}` : `${CFG.grade}-${track}`;
-  const periodSize = () => { const n = pool().length; return n >= 20 ? 10 : Math.min(n, 5); };
-  if (!HW) save('last-grade', CFG.grade);
+  const periodSize = () => { if (CFG.mix) return CFG.mix.reduce((s, m) => s + m[1], 0); const n = pool().length; return n >= 20 ? 10 : Math.min(n, 5); };
+  const orderPicks = new Map();   // 단어 배열: 문제마다 지금까지 누른 카드
+  if (!HW && CFG.grade) save('last-grade', CFG.grade);
 
   function esc(s) { return String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
   function fmtChoice(c) { return CFG.math && /^[-\d.\s]+$/.test(c) ? `$${c}$` : c; }
@@ -141,6 +144,38 @@
       // 서술형: 풀어 본 뒤 정답을 펼쳐 보고 스스로 채점
       return { ...base, type: 'open', q: item.q, answer: item.answer || '', sol: item.sol || '', kind: base.kind || '서술형' };
     }
+    if (item.t === 'word' && dirHint === 'spell') {
+      // 철자 쓰기: 뜻과 글자 수를 보고(소리도 들을 수 있음) 단어를 직접 입력
+      return { ...base, type: 'short', text: true, kind: '철자 쓰기', ans: item.w, say: item.w,
+        q: `다음 뜻을 가진 영어 단어를 쓰세요.<span class="kor">${esc(item.m)}</span><span class="hint-letters">${item.w.length}글자 · ${esc(item.w[0])}(으)로 시작</span>`,
+        sol: `<span class="en">${esc(item.w)}</span>${item.p ? ` (${POS_KO[item.p]})` : ''} ${esc(item.m)}` };
+    }
+    if (item.t === 'word' && dirHint === 'listen') {
+      // 듣고 고르기: 단어는 보여 주지 않고 소리만
+      const opts = shuffle([item, ...distract(item, 'word', rand, 'm')], rand);
+      return { ...base, type: 'mc', kind: '듣고 고르기', ans: opts.indexOf(item), say: item.w, sayLabel: '소리 듣기', sayBig: true,
+        q: '소리를 듣고 알맞은 단어를 고르세요.',
+        choices: opts.map(o => `<span class="en">${esc(o.w)}</span>`),
+        sol: `<span class="en">${esc(item.w)}</span> ${esc(item.m)}` };
+    }
+    if (item.t === 'sent' && dirHint === 'order') {
+      // 단어 배열: 우리말 뜻을 보고 단어 카드를 순서대로 누름
+      const words = item.s.split(' ');
+      let order = shuffle([...words.keys()], rand);
+      if (order.every((k, j) => k === j) && words.length > 1) order = [...order.slice(1), order[0]];
+      return { ...base, type: 'order', kind: '단어 배열', words, order, answerText: item.s, sayAfter: item.s, sayLabel: '문장 듣기',
+        q: `우리말에 맞게 단어를 순서대로 누르세요.<span class="kor">${esc(item.ko)}</span>`,
+        sol: `<span class="en">${esc(item.s)}</span><span class="ko">뜻: ${esc(item.ko)}</span>` };
+    }
+    if (item.t === 'sent') {
+      // 문장 해석: 영어 문장을 보고 알맞은 우리말 고르기
+      const others = shuffle(pool().filter(o => o.t === 'sent' && o !== item && o.ko !== item.ko), rand).slice(0, 4);
+      const opts = shuffle([item, ...others], rand);
+      return { ...base, type: 'mc', kind: '문장 해석', ans: opts.indexOf(item), say: item.s, sayLabel: '문장 듣기',
+        q: `다음 문장의 뜻으로 알맞은 것은?<span class="sentence">${esc(item.s)}</span>`,
+        choices: opts.map(o => esc(o.ko)),
+        sol: `<span class="en">${esc(item.s)}</span><span class="ko">뜻: ${esc(item.ko)}</span>` };
+    }
     if (item.t === 'word') {
       const opts = shuffle([item, ...distract(item, 'word', rand, 'm')], rand);
       const ans = opts.indexOf(item);
@@ -158,7 +193,7 @@
     }
     if (item.t === 'expr') {
       const opts = shuffle([item, ...distract(item, 'expr', rand, 'm')], rand);
-      return { ...base, type: 'mc', kind: base.kind || (track === 'bible' ? '성경에서 온 표현' : '숙어'), ans: opts.indexOf(item), say: item.w,
+      return { ...base, type: 'mc', kind: base.kind || (track === 'bible' ? '성경에서 온 표현' : CFG.mix ? '숙어·표현' : '숙어'), ans: opts.indexOf(item), say: item.w,
         q: `다음 표현의 뜻으로 알맞은 것은?<span class="head">${esc(item.w)}</span>`,
         choices: opts.map(o => esc(o.m)),
         sol: `<span class="en">${esc(item.w)}</span> ${esc(item.m)}${item.r ? ` · 출처: ${esc(item.r)}` : ''}` };
@@ -173,14 +208,48 @@
       sol: `정답 <span class="en">${esc(item.a)}</span>. ${item.e ? esc(item.e) : ''}${item.ko ? `<span class="ko">뜻: ${esc(item.ko)}${item.r ? ` (${esc(item.r)})` : ''}</span>` : ''}` };
   }
 
+  // 섞어 내기(CFG.mix): [[종류, 개수], …] 종류 = word(뜻 고르기) · listen · spell · expr · cloze · trans · order
+  const MIX_SOURCE = { word: 'word', listen: 'word', spell: 'word', expr: 'expr', cloze: 'cloze', trans: 'sent', order: 'sent' };
+  const MIX_HINT = { word: 'wm', listen: 'listen', spell: 'spell', order: 'order' };
+  function mixCandidates(kind) {
+    const src = MIX_SOURCE[kind];
+    return [...pool().keys()].filter(i => {
+      const it = pool()[i];
+      if (it.t !== src) return false;
+      return kind !== 'spell' || /^[A-Za-z]{2,12}$/.test(it.w);   // 철자 쓰기는 띄어쓰기 없는 짧은 단어만
+    });
+  }
+  function mixDeck(pickFor) {
+    const used = new Set(), out = [];
+    for (const [kind, n] of CFG.mix) {
+      const cands = mixCandidates(kind);
+      if (!cands.length) continue;
+      for (const i of pickFor(kind, cands, n)) {
+        // 같은 날 같은 단어·문장이 두 번 나오지 않게
+        const idx = used.has(cands[i]) ? cands.find(c => !used.has(c)) : cands[i];
+        if (idx === undefined) continue;
+        used.add(idx);
+        out.push([idx, kind]);
+      }
+    }
+    return out;
+  }
   function periodDeck(p) {
     const items = pool();
     if (!items.length) return [];
     const rand = rng(`${KEY}-${poolKey()}-${p}`);
+    if (CFG.mix) {
+      return mixDeck((kind, cands, n) => pickCycle(`${KEY}-${poolKey()}-${kind}`, cands.length, periodIndex(p), Math.min(n, cands.length)))
+        .map(([i, kind]) => build(items.at(i), i, rand, MIX_HINT[kind]));
+    }
     return pickCycle(`${KEY}-${poolKey()}`, items.length, periodIndex(p), periodSize()).map(i => build(items.at(i), i, rand));
   }
   function practiceDeck() {
     const items = pool();
+    if (CFG.mix) {
+      return mixDeck((kind, cands, n) => shuffle([...cands.keys()], Math.random).slice(0, n))
+        .map(([i, kind]) => build(items.at(i), i, Math.random, MIX_HINT[kind]));
+    }
     return shuffle([...items.keys()], Math.random).slice(0, 10).map(i => build(items.at(i), i, Math.random));
   }
   // 숙제: 선생님이 적은 순서 그대로, 보기 섞기는 숙제마다 고정
@@ -277,7 +346,7 @@
     } catch {}
   }
   function stopSpeech() { if (CAN_SPEAK) window.speechSynthesis.cancel(); }
-  function sayButton(text, label) { return CAN_SPEAK ? `<button class="say" type="button" data-say="${esc(text)}">${SPEAKER}${label}</button>` : ''; }
+  function sayButton(text, label, big) { return CAN_SPEAK ? `<button class="say${big ? ' big' : ''}" type="button" data-say="${esc(text)}">${SPEAKER}${label}</button>` : ''; }
   if (CAN_SPEAK) window.speechSynthesis.getVoices();
 
   // ── 연습장 (손으로 풀어 보기) ──
@@ -603,8 +672,8 @@
     if (HW) { renderHwPicker(); return; }
     const tracks = Object.keys(TRACK_LABEL).filter(t => (DATA[t] || []).length);
     $('#picker').innerHTML = `
-      <div class="pick-row"><span class="lbl">학년</span><strong>${GRADE_LABEL[CFG.grade]}</strong><a href="index.html">다른 학년 고르기</a></div>
-      ${tracks.length > 1 ? `<div class="pick-row"><span class="lbl">학기</span>
+      ${CFG.grade ? `<div class="pick-row"><span class="lbl">학년</span><strong>${GRADE_LABEL[CFG.grade]}</strong><a href="index.html">다른 학년 고르기</a></div>` : ''}
+      ${tracks.length > 1 ? `<div class="pick-row"><span class="lbl">${CFG.trackLabel || '학기'}</span>
         <div class="seg track">${tracks.map(t => `<button type="button" data-track="${t}" aria-pressed="${t === track}">${TRACK_LABEL[t]} <span class="n">${DATA[t].length}</span></button>`).join('')}</div>
       </div>` : ''}`;
   }
@@ -625,12 +694,12 @@
         <p class="sub">${retrying ? '틀린 문제만 다시 푸는 중이에요. 제출 기록은 바뀌지 않아요.' : '번호를 누르면 그 문제로 이동해요. 푼 곳까지 저장돼서 나중에 이어서 풀 수 있어요.'}</p>`;
       return;
     }
-    const who = `${GRADE_LABEL[CFG.grade]} · ${TRACK_LABEL[track]}`;
+    const who = CFG.grade ? `${GRADE_LABEL[CFG.grade]} · ${TRACK_LABEL[track]}` : TRACK_LABEL[track];
     if (tab === 'period') {
       const done = doneMap()[`${poolKey()}|${view}`];
       const s = streak();
       $('#day').innerHTML = `
-        <button class="nav" type="button" data-act="prev" aria-label="이전">◀</button>
+        <button class="nav" type="button" data-act="prev" aria-label="이전" ${START && view <= START ? 'disabled' : ''}>◀</button>
         <span class="date">${periodLabel(view)}</span>
         <button class="nav" type="button" data-act="next-period" aria-label="다음" ${view >= THIS_PERIOD ? 'disabled' : ''}>▶</button>
         ${done ? `<span class="badge">완료 ${done.right}/${done.total}</span>` : ''}
@@ -681,6 +750,19 @@
         const mini = q.sayChoices && CAN_SPEAK ? `<button class="say-mini" type="button" data-say="${esc(q.sayChoices.at(i))}" aria-label="${LABELS.at(i)} 발음 듣기">${SPEAKER}</button>` : '';
         return `<li><button class="choice ${cls}" type="button" data-pick="${i}" ${done ? 'disabled' : ''}><span class="lab">${LABELS.at(i)}${m}</span><span>${c}</span></button>${mini}</li>`;
       }).join('')}</ol>`;
+    } else if (q.type === 'order') {
+      // 단어 배열: 아래 카드를 누르면 위 줄에 차례로 놓이고, 위 카드를 누르면 되돌아감
+      const picks = done ? res.picked : (orderPicks.get(q.src) || []);
+      const line = picks.map((k, pos) => `<button class="tok on" type="button" data-untok="${pos}" ${done ? 'disabled' : ''}>${esc(q.words[k])}</button>`).join('');
+      const bank = q.order.map(k => picks.includes(k)
+        ? `<span class="tok ghost" aria-hidden="true">${esc(q.words[k])}</span>`
+        : `<button class="tok" type="button" data-tok="${k}">${esc(q.words[k])}</button>`).join('');
+      body = `<div class="order">
+        <div class="order-line${done ? (res.correct ? ' ok' : ' no') : ''}" aria-label="내가 만든 문장">${line || '<span class="order-hint">아래 단어를 순서대로 눌러 보세요</span>'}</div>
+        ${done ? '' : `<div class="order-bank">${bank}</div>
+        <div class="row"><button class="btn ghost" type="button" data-act="order-reset">다시</button>
+        <button class="btn" type="button" data-act="order-check" ${picks.length === q.words.length ? '' : 'disabled'}>확인</button></div>`}
+      </div>`;
     } else if (q.type === 'open') {
       // 서술형: 풀기 → 정답 확인 → 스스로 채점
       const open = done || revealed.has(q.src);
@@ -696,7 +778,7 @@
       </form>`;
     }
     const last = idx === deck.length - 1;
-    const answerText = q.type === 'mc' ? LABELS.at(q.ans) : [].concat(q.ans).join(' 또는 ');
+    const answerText = q.type === 'mc' ? LABELS.at(q.ans) : q.type === 'order' ? q.answerText : [].concat(q.ans).join(' 또는 ');
     const verdict = q.type === 'open'
       ? (res && res.correct ? '맞았어요!' : '다음엔 맞힐 수 있어요.')
       : (res && res.correct ? '정답이에요!' : `아쉬워요. 정답은 ${answerText}`);
@@ -711,7 +793,7 @@
         <div class="qnum">${idx + 1}${done ? mark(res.correct ? 'ok' : 'no') : ''}</div>
         <div><div class="meta">${meta}</div><p class="qtext">${q.q}</p></div>
       </div>
-      <div class="tools-row">${q.say ? sayButton(q.say, '발음 듣기') : ''}<button class="scratch-btn" type="button" data-act="scratch">${PENCIL}연습장</button></div>
+      <div class="tools-row">${q.say ? sayButton(q.say, q.sayLabel && !q.sayAfter ? q.sayLabel : '발음 듣기', q.sayBig) : ''}<button class="scratch-btn" type="button" data-act="scratch">${PENCIL}연습장</button></div>
       ${body}
       ${feedback}
     </article>`;
@@ -800,6 +882,7 @@
     const norm = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]$/, '');
     if (q.type === 'mc') { picked = value; correct = value === q.ans; }
     else if (q.type === 'open') { picked = value; correct = value === 'right'; }
+    else if (q.type === 'order') { picked = value; correct = value.map(k => q.words[k]).join(' ') === q.answerText; orderPicks.delete(q.src); }
     else {
       picked = String(value).trim();
       if (!picked) return;
@@ -894,12 +977,26 @@
     const tr = e.target.closest('[data-track]');
     if (tr) {
       if (tr.dataset.track === track) return;
-      stopSpeech(); track = tr.dataset.track; save(`track-${CFG.grade}`, track); tab = 'period'; save(`tabsel-${CFG.grade}`, tab); view = THIS_PERIOD; start(); return;
+      stopSpeech(); track = tr.dataset.track; save(`track-${CFG.grade || 'level'}`, track); tab = 'period'; save(`tabsel-${CFG.grade}`, tab); view = THIS_PERIOD; start(); return;
     }
     const tb = e.target.closest('[data-tab]');
     if (tb) {
       if (tb.dataset.tab === tab && (tab !== 'period' || view === THIS_PERIOD)) return;
       stopSpeech(); tab = tb.dataset.tab; save(`tabsel-${CFG.grade}`, tab); view = THIS_PERIOD; start(); return;
+    }
+    // 단어 배열 카드
+    const tok = e.target.closest('[data-tok]'), untok = e.target.closest('[data-untok]');
+    if (tok || untok || sa === 'order-reset' || sa === 'order-check') {
+      const q = deck.at(idx);
+      if (!q || q.type !== 'order' || results.at(idx)) return;
+      const picks = (orderPicks.get(q.src) || []).slice();
+      if (tok) picks.push(Number(tok.dataset.tok));
+      if (untok) picks.splice(Number(untok.dataset.untok), 1);
+      if (sa === 'order-reset') picks.length = 0;
+      if (sa === 'order-check') { if (picks.length === q.words.length) answer(picks); return; }
+      orderPicks.set(q.src, picks);
+      renderStage();
+      return;
     }
     const pick = e.target.closest('[data-pick]');
     if (pick && !pick.disabled) { answer(Number(pick.dataset.pick)); return; }
@@ -911,7 +1008,7 @@
       if (inp) { inp.value = inp.value.startsWith('-') ? inp.value.slice(1) : '-' + inp.value; }
     }
     if (act === 'restart') start(true);
-    if (act === 'prev') { view = addDays(view, -STEP); start(); }
+    if (act === 'prev' && !(START && view <= START)) { view = addDays(view, -STEP); start(); }
     if (act === 'next-period' && view < THIS_PERIOD) { view = addDays(view, STEP); start(); }
     if (act === 'retry-wrong') {
       deck = deck.filter((_, i) => !(results.at(i) && results.at(i).correct));
@@ -933,13 +1030,13 @@
   });
 
   // 뼈대 그리기
-  const heading = HW ? CFG.title : `${CFG.title} ${GRADE_LABEL[CFG.grade]}`;
+  const heading = HW || !CFG.grade ? CFG.title : `${CFG.title} ${GRADE_LABEL[CFG.grade]}`;
   document.title = heading;
   $('#app').innerHTML = `
     <header>
       ${CFG.home === false ? '' : `<a class="home" href="${CFG.home || '../index.html'}">← 이레 처음으로</a>`}
       <span class="eyebrow">${CFG.eyebrow || ''}</span>
-      <h1>${heading}</h1>
+      ${CFG.logo ? `<div class="brand-row"><img class="brand" src="${CFG.logo}" alt=""><h1>${heading}</h1></div>` : `<h1>${heading}</h1>`}
       <p class="lead">${CFG.lead || ''}</p>
     </header>
     <section class="picker" id="picker" aria-label="${HW ? '숙제 정보' : '학년과 과정'}"></section>

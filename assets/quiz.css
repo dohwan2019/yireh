@@ -38,6 +38,10 @@ header{display:flex; flex-direction:column; gap:4px}
 .eyebrow{font-size:13px; letter-spacing:.06em; color:var(--muted); font-weight:500}
 h1{font-family:var(--hand); font-weight:400; font-size:48px; line-height:1.05; margin:0; text-wrap:balance}
 .lead{margin:0; color:var(--muted); font-size:15px}
+/* 과목 아이콘 (제목 왼쪽) */
+.brand-row{display:flex; align-items:center; gap:14px}
+.brand{width:76px; height:76px; flex:none; border-radius:18px; background:#FBFAF6; box-shadow:0 1px 2px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.08); border:1px solid var(--line)}
+@media (max-width:420px){ .brand{width:62px; height:62px; border-radius:15px} }
 
 /* 학년·과정 선택 */
 .picker{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; display:grid; gap:10px}
@@ -164,6 +168,22 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--sel); outline-offse
 .empty{color:var(--muted); margin:0}
 footer{font-size:13px; color:var(--muted); text-align:center}
 mjx-container{color:inherit}
+
+/* 이레 영어: 단어 배열 · 철자 힌트 · 소리 듣기 */
+.order{display:flex; flex-direction:column; gap:12px}
+.order-line{min-height:58px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; border:2px dashed var(--line); border-radius:12px; background:var(--paper)}
+.order-line.ok{border-style:solid; border-color:var(--pen)}
+.order-line.no{border-style:solid; border-color:var(--muted)}
+.order-hint{color:var(--muted); font-size:14px}
+.order-bank{display:flex; flex-wrap:wrap; gap:8px}
+.tok{font-family:var(--en); font-size:18px; font-weight:500; padding:7px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; box-shadow:0 1px 0 var(--line)}
+.tok:hover:not(:disabled){border-color:var(--sel); background:var(--sel-soft)}
+.tok.on{background:var(--sel-soft); border-color:var(--sel)}
+.tok.ghost{opacity:.25; cursor:default; box-shadow:none}
+.tok:disabled{cursor:default}
+.hint-letters{display:block; margin-top:6px; font-size:14px; color:var(--muted)}
+.say.big{font-size:17px; padding:10px 20px 10px 14px}
+.say.big svg{width:24px; height:24px}
 
 /* 연습장 */
 .tools-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}

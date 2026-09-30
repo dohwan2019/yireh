@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,500;0,600;1,500&family=Nanum+Pen+Script&display=swap">
-<link rel="stylesheet" href="../assets/quiz.css?v=202609300711">
+<link rel="stylesheet" href="../assets/quiz.css?v=202609300901">
 <link rel="manifest" href="../manifest.webmanifest">
 <meta name="theme-color" content="#18212E">
 <link rel="icon" type="image/png" sizes="192x192" href="../icons/app-192.png">
@@ -18,14 +18,14 @@
 </head>
 <body>
 <div class="wrap" id="app"></div>
-<script>window.QUIZ_CONFIG = {"subject":"math","grade":"m3","title":"이레 수학","period":"week","math":true,"speech":false,"eyebrow":"학년별 수학","lead":"매주 월요일 새 문제가 나와요. 바로 채점하고, 틀린 문제는 오답노트에 모입니다.","footer":"숫자 키 1~5로 보기 선택, Enter로 다음 문제"};</script>
+<script>window.QUIZ_CONFIG = {"subject":"math","grade":"m3","title":"이레 수학","period":"week","math":true,"speech":false,"eyebrow":"학년별 수학","lead":"매주 월요일 새 문제가 나와요. 바로 채점하고, 틀린 문제는 오답노트에 모입니다.","footer":"숫자 키 1~5로 보기 선택, Enter로 다음 문제","logo":"../assets/yireh-math.svg"};</script>
 <script>
 window.MathJax = { tex: { inlineMath: [['$', '$']] }, svg: { fontCache: 'global' },
   startup: { typeset: false, ready() { MathJax.startup.defaultReady(); MathJax.startup.promise.then(() => window.IRAE_READY && window.IRAE_READY()); } } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" async></script>
-<script src="../data/math-m3.js?v=202609300711"></script>
-<script src="../assets/quiz.js?v=202609300711"></script>
+<script src="../data/math-m3.js?v=202609300901"></script>
+<script src="../assets/quiz.js?v=202609300901"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('../sw.js').catch(function () {});
