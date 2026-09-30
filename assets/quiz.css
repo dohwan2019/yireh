@@ -39,7 +39,10 @@ header{display:flex; flex-direction:column; gap:4px}
 h1{font-family:var(--hand); font-weight:400; font-size:48px; line-height:1.05; margin:0; text-wrap:balance}
 .lead{margin:0; color:var(--muted); font-size:15px}
 /* 과목 아이콘 (제목 왼쪽) */
-.brand-row{display:flex; align-items:center; gap:14px}
+.brand-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.brand-wide{height:92px; width:auto; max-width:100%; flex:none; display:block; margin:2px 0 2px -6px}
+@media (max-width:420px){ .brand-wide{height:70px} }
+.sr{position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
 .brand{width:76px; height:76px; flex:none; border-radius:18px; background:#FBFAF6; box-shadow:0 1px 2px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.08); border:1px solid var(--line)}
 @media (max-width:420px){ .brand{width:62px; height:62px; border-radius:15px} }
 

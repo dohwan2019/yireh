@@ -1029,6 +1029,12 @@
     else if (e.key === 'Enter' && results.at(idx) && !e.target.closest('button')) next();
   });
 
+  // 한 줄 로고(예: "이레수학" 그림) 옆에는 제목에서 로고 글자를 뺀 나머지만 (중1, 숙제 …). 읽기 프로그램에는 전체 제목
+  function brandRow(src, logoText, heading) {
+    const rest = heading.startsWith(logoText) ? heading.slice(logoText.length).trim() : heading;
+    return `<div class="brand-row"><img class="brand-wide" src="${src}" alt="${logoText}">${rest ? `<h1><span class="sr">${logoText} </span>${rest}</h1>` : `<h1 class="sr">${heading}</h1>`}</div>`;
+  }
+
   // 뼈대 그리기
   const heading = HW || !CFG.grade ? CFG.title : `${CFG.title} ${GRADE_LABEL[CFG.grade]}`;
   document.title = heading;
@@ -1036,7 +1042,7 @@
     <header>
       ${CFG.home === false ? '' : `<a class="home" href="${CFG.home || '../index.html'}">← 이레 처음으로</a>`}
       <span class="eyebrow">${CFG.eyebrow || ''}</span>
-      ${CFG.logo ? `<div class="brand-row"><img class="brand" src="${CFG.logo}" alt=""><h1>${heading}</h1></div>` : `<h1>${heading}</h1>`}
+      ${CFG.logo ? brandRow(CFG.logo, CFG.logoText || CFG.title, heading) : `<h1>${heading}</h1>`}
       <p class="lead">${CFG.lead || ''}</p>
     </header>
     <section class="picker" id="picker" aria-label="${HW ? '숙제 정보' : '학년과 과정'}"></section>
