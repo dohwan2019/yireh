@@ -19,7 +19,7 @@
   const HW_SETS = HW ? ((window.HOMEWORK && window.HOMEWORK.sets) || []).filter(s => s && s.id && Array.isArray(s.questions) && s.questions.length) : [];
   const DATA = window.QUIZ_DATA || { general: [], bible: [] };
   const GRADE_LABEL = { e1:'초1', e2:'초2', e3:'초3', e4:'초4', e5:'초5', e6:'초6', m1:'중1', m2:'중2', m3:'중3', h1:'고1', h2:'고2', h3:'고3' };
-  const TRACK_LABEL = { general: '일반', bible: '성경' };
+  const TRACK_LABEL = { s1: '1학기', s2: '2학기', general: '전체', bible: '성경' };
   const POS = { v: 'v.', a: 'adj.', n: 'n.', ad: 'adv.' };
   const POS_KO = { v: '동사', a: '형용사', n: '명사', ad: '부사' };
   const LABELS = ['①', '②', '③', '④', '⑤'];
@@ -73,8 +73,10 @@
   function save(name, value) { try { localStorage.setItem(`${KEY}-${name}`, JSON.stringify(value)); } catch {} }
 
   // ── 상태 ──
-  let track = load(`track-${CFG.grade}`, 'general');
-  if (!DATA[track] || !DATA[track].length) track = DATA.general && DATA.general.length ? 'general' : 'bible';
+  const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric' }).format(new Date()));
+  const nowSem = month >= 3 && month <= 8 ? 's1' : 's2';
+  let track = load(`track-${CFG.grade}`, nowSem);
+  if (!DATA[track] || !DATA[track].length) track = Object.keys(TRACK_LABEL).find(k => (DATA[k] || []).length) || 's1';
   let tab = load(`tabsel-${CFG.grade}`, 'period');   // period | practice | wrong (마지막으로 보던 탭)
   if (!['period', 'practice', 'wrong'].includes(tab)) tab = 'period';
   let view = THIS_PERIOD;
@@ -602,7 +604,7 @@
     const tracks = Object.keys(TRACK_LABEL).filter(t => (DATA[t] || []).length);
     $('#picker').innerHTML = `
       <div class="pick-row"><span class="lbl">학년</span><strong>${GRADE_LABEL[CFG.grade]}</strong><a href="index.html">다른 학년 고르기</a></div>
-      ${tracks.length > 1 ? `<div class="pick-row"><span class="lbl">과정</span>
+      ${tracks.length > 1 ? `<div class="pick-row"><span class="lbl">학기</span>
         <div class="seg track">${tracks.map(t => `<button type="button" data-track="${t}" aria-pressed="${t === track}">${TRACK_LABEL[t]} <span class="n">${DATA[t].length}</span></button>`).join('')}</div>
       </div>` : ''}`;
   }
@@ -645,8 +647,7 @@
       const r = results.at(i);
       const cls = `dot ${r ? (r.correct ? 'ok' : 'no') : ''}${i === idx ? ' now' : ''}`;
       // 숙제는 번호를 눌러 문제를 옮겨 다닐 수 있음
-      return HW ? `<button class="${cls}" type="button" data-goto="${i}" aria-label="${i + 1}번 문제${r ? (r.correct ? ' (맞음)' : ' (틀림)') : ''}">${i + 1}</button>`
-        : `<span class="${cls}">${i + 1}</span>`;
+      return `<button class="${cls}" type="button" data-goto="${i}" aria-label="${i + 1}번 문제${r ? (r.correct ? ' (맞음)' : ' (틀림)') : ''}">${i + 1}</button>`;
     }).join('');
   }
   function renderStage() {
@@ -769,6 +770,14 @@
 
   function summaryHTML() {
     if (HW) return hwSummaryHTML();
+    const todo = deck.map((_, i) => i).filter(i => !results.at(i));
+    if (todo.length) {
+      return `<article class="card">
+        <p class="verdict">아직 안 푼 문제가 ${todo.length}개 있어요.</p>
+        <p class="empty">${todo.map(i => i + 1).join(', ')}번</p>
+        <div class="row"><button class="btn" type="button" data-goto="${todo[0]}">${todo[0] + 1}번부터 풀기</button></div>
+      </article>`;
+    }
     const total = deck.length;
     const right = results.filter(r => r && r.correct).length;
     const wrongQs = deck.filter((_, i) => !(results.at(i) && results.at(i).correct));
@@ -864,6 +873,13 @@
   document.addEventListener('input', e => { if (HW && e.target.id === 'hw-name') save('name', e.target.value.trim()); });
 
   document.addEventListener('click', e => {
+    const goBtn = !HW && e.target.closest('[data-goto]');
+    if (goBtn) {
+      stopSpeech(); closeScratch();
+      idx = Number(goBtn.dataset.goto); stash(); renderStage();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const tool = e.target.closest('[data-tool]');
     if (tool && pad) { setTool(tool.dataset.tool); return; }
     const sa = e.target.closest('[data-act]') && e.target.closest('[data-act]').dataset.act;
@@ -929,7 +945,7 @@
     <section class="picker" id="picker" aria-label="${HW ? '숙제 정보' : '학년과 과정'}"></section>
     <nav class="chips" id="tabs" aria-label="퀴즈 종류"></nav>
     <section class="day" id="day" aria-live="polite"></section>
-    <div class="dots" id="dots" ${HW ? 'role="navigation" aria-label="문제 번호"' : 'aria-hidden="true"'}></div>
+    <div class="dots" id="dots" role="navigation" aria-label="문제 번호"></div>
     <main id="stage"></main>
     <footer>${CFG.footer || ''}</footer>`;
   window.IRAE_READY = () => typeset($('#stage'));
