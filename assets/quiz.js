@@ -14,6 +14,9 @@
  */
 (function () {
   const CFG = window.QUIZ_CONFIG;
+  // 숙제 모드: homework/current.js의 window.HOMEWORK = { sets: [ { id, title, label, due, note, questions: [...] } ] }
+  const HW = CFG.mode === 'homework';
+  const HW_SETS = HW ? ((window.HOMEWORK && window.HOMEWORK.sets) || []).filter(s => s && s.id && Array.isArray(s.questions) && s.questions.length) : [];
   const DATA = window.QUIZ_DATA || { general: [], bible: [] };
   const GRADE_LABEL = { e1:'초1', e2:'초2', e3:'초3', e4:'초4', e5:'초5', e6:'초6', m1:'중1', m2:'중2', m3:'중3', h1:'고1', h2:'고2', h3:'고3' };
   const TRACK_LABEL = { general: '일반', bible: '성경' };
@@ -23,7 +26,7 @@
   const CIRCLE = 'M50 7C79 5 95 29 93 54C90 82 61 96 38 91C15 86 4 61 9 38C14 17 35 5 60 9';
   const SLASH = 'M18 88L84 10';
   const SPEAKER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
-  const KEY = `irae-${CFG.subject}`;
+  const KEY = HW ? 'irae-homework' : `irae-${CFG.subject}`;
   const WEEK = CFG.period === 'week';
   const PERIOD_NAME = WEEK ? '이번 주' : '오늘의';
   const $ = s => document.querySelector(s);
@@ -77,10 +80,16 @@
   let view = THIS_PERIOD;
   let deck = [], idx = 0, results = [], retrying = false;
   const memo = {};
-  const pool = () => DATA[track] || [];
-  const poolKey = () => `${CFG.grade}-${track}`;
+  // 숙제 모드에서 지금 보고 있는 숙제
+  let hwId = load('set', HW_SETS.length ? HW_SETS[0].id : '');
+  if (HW && !HW_SETS.some(s => s.id === hwId)) hwId = HW_SETS.length ? HW_SETS[0].id : '';
+  const hwSet = () => HW_SETS.find(s => s.id === hwId);
+  if (HW) { tab = 'hw'; track = hwSet() && hwSet().track === 'bible' ? 'bible' : 'general'; }
+  const revealed = new Set();   // 서술형: 정답을 펼쳐 본 문제
+  const pool = () => HW ? (hwSet() ? hwSet().questions : []) : (DATA[track] || []);
+  const poolKey = () => HW ? `hw-${hwId}` : `${CFG.grade}-${track}`;
   const periodSize = () => { const n = pool().length; return n >= 20 ? 10 : Math.min(n, 5); };
-  save('last-grade', CFG.grade);
+  if (!HW) save('last-grade', CFG.grade);
 
   function esc(s) { return String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
   function fmtChoice(c) { return CFG.math && /^[-\d.\s]+$/.test(c) ? `$${c}$` : c; }
@@ -109,14 +118,26 @@
     expr: [{ w: 'give up', m: '포기하다' }, { w: 'look after', m: '돌보다' }, { w: 'put off', m: '미루다' }, { w: 'find out', m: '알아내다' }],
   };
 
+  // 문제에 그림(img)이 있으면 문제 아래에 붙임
   function build(item, i, rand, dirHint) {
+    const q = buildInner(item, i, rand, dirHint);
+    if (item.img) q.q += `<img class="q-img" src="${esc(item.img)}" alt="${esc(item.imgAlt || '문제 그림')}">`;
+    return q;
+  }
+  function buildInner(item, i, rand, dirHint) {
     const src = `${poolKey()}#${i}`;
     const base = { src, cat: item.cat || (track === 'bible' ? '성경' : ''), unit: item.unit || '', kind: item.kind || '' };
     if (item.t === 'mc') {
-      return { ...base, type: 'mc', q: item.q, choices: item.c.map(fmtChoice), ans: item.a, sol: item.sol, kind: base.kind || '5지선다' };
+      return { ...base, type: 'mc', q: item.q, choices: item.c.map(fmtChoice), ans: item.a, sol: item.sol || '', kind: base.kind || '5지선다' };
     }
     if (item.t === 'short') {
-      return { ...base, type: 'short', q: item.q, ans: item.a, sol: item.sol, kind: base.kind || '단답형' };
+      // a가 숫자면 숫자로, 글자(또는 여러 개의 정답 목록)면 대소문자·띄어쓰기를 무시하고 비교
+      const text = typeof item.a !== 'number';
+      return { ...base, type: 'short', text, q: item.q, ans: item.a, sol: item.sol || '', kind: base.kind || '단답형' };
+    }
+    if (item.t === 'open') {
+      // 서술형: 풀어 본 뒤 정답을 펼쳐 보고 스스로 채점
+      return { ...base, type: 'open', q: item.q, answer: item.answer || '', sol: item.sol || '', kind: base.kind || '서술형' };
     }
     if (item.t === 'word') {
       const opts = shuffle([item, ...distract(item, 'word', rand, 'm')], rand);
@@ -160,6 +181,10 @@
     const items = pool();
     return shuffle([...items.keys()], Math.random).slice(0, 10).map(i => build(items.at(i), i, Math.random));
   }
+  // 숙제: 선생님이 적은 순서 그대로, 보기 섞기는 숙제마다 고정
+  function hwDeck() {
+    return pool().map((item, i) => build(item, i, rng(`${KEY}-${hwId}-${i}`)));
+  }
   function wrongDeck() {
     const wrong = new Set(load('wrong', []));
     const items = pool();
@@ -170,7 +195,16 @@
   // ── 진행 기록 ──
   function stateKey() { return `${poolKey()}|${tab}${tab === 'period' ? `|${view}` : ''}`; }
   function deckSig() { return deck.map(q => q.src).join(','); }
+  // 숙제 문제가 바뀌었는지 확인하는 표시 (문제 글과 정답으로 만듦)
+  function hwSig() { return String(hash(deck.map(q => `${q.q}|${JSON.stringify(q.ans ?? q.answer)}`).join('\n'))); }
   function stash() {
+    if (HW) {
+      if (retrying) return;
+      const all = load('session', {});
+      all[hwId] = { idx, results, sig: hwSig() };
+      save('session', all);
+      return;
+    }
     memo[stateKey()] = { deck, idx, results, retrying };
     // 연습·오답노트는 뽑힌 문제까지 통째로 저장해서 새로고침해도 이어서 풀 수 있게 함
     if (tab !== 'period') save(`tab-${stateKey()}`, { deck, idx, results, retrying });
@@ -191,6 +225,17 @@
   }
 
   function start(fresh = false) {
+    if (HW) {
+      deck = hwDeck(); retrying = false; revealed.clear();
+      const s = fresh ? null : load('session', {})[hwId];
+      const ok = s && s.sig === hwSig() && Array.isArray(s.results);
+      results = ok ? s.results : [];
+      idx = ok ? Math.min(s.idx, deck.length) : 0;
+      if (fresh) { const done = load('done', {}); delete done[hwId]; save('done', done); }
+      stash();
+      renderAll();
+      return;
+    }
     let saved = memo[stateKey()];
     if (!fresh && !saved && tab !== 'period') {
       const s = load(`tab-${stateKey()}`, null);
@@ -234,10 +279,14 @@
   if (CAN_SPEAK) window.speechSynthesis.getVoices();
 
   // ── 연습장 (손으로 풀어 보기) ──
-  // 문제마다 그림을 따로 기억함. 페이지를 닫으면 지워짐 (그림은 용량이 커서 저장하지 않음)
+  // 선(획) 단위로 기억해서 화면 옮기기, 골라서 옮기기, 되돌리기가 됨. 문제마다 따로 기억하고, 페이지를 닫으면 지워짐
+  //   그리기: 검은 펜 / 빨간 펜     지우개: 닿은 선을 통째로 지움
+  //   선택: 올가미로 둘러서 고른 뒤, 상자 안을 끌어 옮김
+  //   이동: 끌어서 화면 옮기기 (두 손가락으로 끌어도 됨. 애플펜슬을 쓰면 손가락 하나로도 옮겨짐)
   const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>';
-  const scratchStore = new Map();
+  const scratchStore = new Map();   // 문제 → { strokes, ox, oy, hist }
   let pad = null;
+  const PEN_W = 2.6, ERASE_R = 12, GRID = 24;
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#18212E'; }
   function buildPad() {
     const back = document.createElement('div');
@@ -248,94 +297,277 @@
     sheet.innerHTML = `
       <div class="sheet-bar">
         <span class="title">연습장</span>
-        <button class="tool" type="button" data-tool="ink" aria-pressed="true" aria-label="검은 펜"><span class="swatch"></span></button>
-        <button class="tool" type="button" data-tool="red" aria-pressed="false" aria-label="빨간 펜"><span class="swatch red"></span></button>
-        <button class="tool" type="button" data-tool="erase" aria-pressed="false">지우개</button>
-        <button class="tool" type="button" data-act="scratch-undo">되돌리기</button>
-        <button class="tool" type="button" data-act="scratch-clear">모두 지우기</button>
-        <button class="tool close" type="button" data-act="scratch-close">닫기</button>
+        <div class="tool-group">
+          <button class="tool" type="button" data-tool="ink" aria-pressed="true" aria-label="검은 펜"><span class="swatch"></span></button>
+          <button class="tool" type="button" data-tool="red" aria-pressed="false" aria-label="빨간 펜"><span class="swatch red"></span></button>
+          <button class="tool" type="button" data-tool="erase" aria-pressed="false">지우개</button>
+          <button class="tool" type="button" data-tool="lasso" aria-pressed="false">선택</button>
+          <button class="tool" type="button" data-tool="hand" aria-pressed="false">이동</button>
+        </div>
+        <div class="tool-group">
+          <button class="tool" type="button" data-act="scratch-undo">되돌리기</button>
+          <button class="tool" type="button" data-act="scratch-home">제자리</button>
+          <button class="tool" type="button" data-act="scratch-clear">모두 지우기</button>
+          <button class="tool close" type="button" data-act="scratch-close">닫기</button>
+        </div>
       </div>
       <div class="sheet-q"></div>
-      <div class="pad-wrap"><canvas class="pad"></canvas><p class="pad-hint">손가락이나 펜으로 풀어 보세요</p></div>`;
+      <div class="pad-wrap"><canvas class="pad"></canvas><p class="pad-hint">손가락이나 펜으로 풀어 보세요<br>두 손가락으로 끌면 화면이 옮겨져요</p></div>`;
     document.body.append(back, sheet);
     const canvas = sheet.querySelector('canvas');
     pad = { back, sheet, canvas, ctx: canvas.getContext('2d'), hint: sheet.querySelector('.pad-hint'), qEl: sheet.querySelector('.sheet-q'),
-      strokes: [], tool: 'ink', cur: null, penSeen: false };
-    const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+      page: null, tool: 'ink', w: 0, h: 0, dpr: 0, penSeen: false, pointers: new Map(),
+      mode: null, cur: null, erased: null, lasso: null, sel: null, drag: null, pan: null };
+
+    const screenPos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    const toWorld = ([x, y]) => [x + pad.page.ox, y + pad.page.oy];
+    const touches = () => [...pad.pointers.values()].filter(p => p.type === 'touch');
+    const mid = list => [(list[0].x + list[1].x) / 2, (list[0].y + list[1].y) / 2];
+
     canvas.addEventListener('pointerdown', e => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      if (e.pointerType === 'pen') pad.penSeen = true;
-      if (e.pointerType === 'touch' && pad.penSeen) return; // 펜을 쓰는 중이면 손바닥 터치는 무시
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
-      pad.cur = { tool: pad.tool, pts: [pos(e)] };
-      pad.strokes.push(pad.cur);
-      drawStroke(pad.cur, 0);
-      pad.hint.hidden = true;
+      const sp = screenPos(e);
+      pad.pointers.set(e.pointerId, { x: sp[0], y: sp[1], type: e.pointerType });
+      if (e.pointerType === 'pen') pad.penSeen = true;
+      // 두 손가락 → 화면 옮기기 (첫 손가락으로 막 그리던 선은 취소)
+      if (e.pointerType === 'touch' && touches().length >= 2) {
+        cancelCurrent();
+        const m = mid(touches());
+        pad.mode = 'pan2'; pad.pan = { m0: m, ox0: pad.page.ox, oy0: pad.page.oy };
+        return;
+      }
+      // 이동 도구이거나, 애플펜슬을 쓰는 중에 손가락을 대면 → 화면 옮기기
+      if (pad.tool === 'hand' || (e.pointerType === 'touch' && pad.penSeen)) {
+        pad.mode = 'pan1'; pad.pan = { id: e.pointerId, s0: sp, ox0: pad.page.ox, oy0: pad.page.oy };
+        return;
+      }
+      const w = toWorld(sp);
+      if (pad.tool === 'ink' || pad.tool === 'red') {
+        pad.cur = { tool: pad.tool, pts: [w] };
+        pad.page.strokes.push(pad.cur);
+        pad.mode = 'draw';
+        drawStroke(pad.cur, 0);
+        pad.hint.hidden = true;
+      } else if (pad.tool === 'erase') {
+        pad.mode = 'erase'; pad.erased = [];
+        eraseAt(w);
+      } else if (pad.tool === 'lasso') {
+        if (pad.sel && inBox(w, pad.sel.box)) { pad.mode = 'move'; pad.drag = { last: w, dx: 0, dy: 0 }; }
+        else { pad.sel = null; pad.mode = 'lasso'; pad.lasso = [w]; redrawPad(); }
+      }
     });
+
     canvas.addEventListener('pointermove', e => {
-      if (!pad.cur) return;
-      const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-      const from = pad.cur.pts.length - 1;
-      for (const ev of events) pad.cur.pts.push(pos(ev));
-      drawStroke(pad.cur, from);
+      const p = pad.pointers.get(e.pointerId);
+      if (!p) return;
+      const sp = screenPos(e);
+      p.x = sp[0]; p.y = sp[1];
+      const mode = pad.mode;
+      if (mode === 'pan2') {
+        const t = touches();
+        if (t.length < 2) return;
+        const m = mid(t);
+        pad.page.ox = pad.pan.ox0 - (m[0] - pad.pan.m0[0]);
+        pad.page.oy = pad.pan.oy0 - (m[1] - pad.pan.m0[1]);
+        redrawPad();
+      } else if (mode === 'pan1' && e.pointerId === pad.pan.id) {
+        pad.page.ox = pad.pan.ox0 - (sp[0] - pad.pan.s0[0]);
+        pad.page.oy = pad.pan.oy0 - (sp[1] - pad.pan.s0[1]);
+        redrawPad();
+      } else if (mode === 'draw' || mode === 'erase' || mode === 'lasso') {
+        // 빠르게 움직일 때 빠진 점까지 모두 받아서 펜 끝을 정확히 따라감
+        const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+        const pts = (events.length ? events : [e]).map(ev => toWorld(screenPos(ev)));
+        if (mode === 'draw') {
+          const from = pad.cur.pts.length - 1;
+          pad.cur.pts.push(...pts);
+          drawStroke(pad.cur, from);
+        } else if (mode === 'erase') {
+          for (const w of pts) eraseAt(w);
+        } else {
+          pad.lasso.push(...pts);
+          redrawPad();
+        }
+      } else if (mode === 'move') {
+        const w = toWorld(sp);
+        const dx = w[0] - pad.drag.last[0], dy = w[1] - pad.drag.last[1];
+        pad.drag.last = w; pad.drag.dx += dx; pad.drag.dy += dy;
+        shiftStrokes(pad.sel.strokes, dx, dy);
+        pad.sel.box = [pad.sel.box[0] + dx, pad.sel.box[1] + dy, pad.sel.box[2] + dx, pad.sel.box[3] + dy];
+        redrawPad();
+      }
     });
-    const end = () => { pad.cur = null; };
+
+    const end = e => {
+      pad.pointers.delete(e.pointerId);
+      const mode = pad.mode, page = pad.page;
+      if (mode === 'pan2') { if (touches().length < 2) pad.mode = null; return; }
+      if (mode === 'pan1' && e.pointerId !== pad.pan.id) return;
+      if (mode === 'draw' && pad.cur) page.hist.push({ t: 'add', s: pad.cur });
+      if (mode === 'erase' && pad.erased.length) page.hist.push({ t: 'erase', items: pad.erased });
+      if (mode === 'lasso') { selectInLasso(); pad.lasso = null; redrawPad(); }
+      if (mode === 'move' && (pad.drag.dx || pad.drag.dy)) page.hist.push({ t: 'move', ss: pad.sel.strokes, dx: pad.drag.dx, dy: pad.drag.dy });
+      pad.mode = null; pad.cur = null; pad.erased = null; pad.drag = null; pad.pan = null;
+    };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
     // 휴대폰 기본 동작(길게 눌러 선택·메뉴, 화면 끌기)을 막음
-    const stop = e => { if (e.cancelable) e.preventDefault(); };
+    const stop = ev => { if (ev.cancelable) ev.preventDefault(); };
     canvas.addEventListener('touchstart', stop, { passive: false });
     canvas.addEventListener('touchmove', stop, { passive: false });
     sheet.addEventListener('contextmenu', stop);
     sheet.addEventListener('selectstart', stop);
+    // 그림판 크기가 바뀌면(수식이 그려져 문제 영역이 커질 때, 화면 회전, 주소창 변화) 바로 다시 맞춤 → 펜 끝과 선이 어긋나지 않게
+    if (window.ResizeObserver) new ResizeObserver(() => { if (!pad.sheet.hidden) sizePad(); }).observe(canvas);
     window.addEventListener('resize', () => { if (!pad.sheet.hidden) sizePad(); });
   }
+
+  function cancelCurrent() {
+    if (pad.mode === 'draw' && pad.cur) {
+      const i = pad.page.strokes.indexOf(pad.cur);
+      if (i >= 0) pad.page.strokes.splice(i, 1);
+    }
+    if (pad.mode === 'erase' && pad.erased && pad.erased.length) pad.page.hist.push({ t: 'erase', items: pad.erased });
+    pad.cur = null; pad.erased = null; pad.lasso = null; pad.mode = null;
+    redrawPad();
+  }
+  function shiftStrokes(list, dx, dy) { for (const s of list) for (const pt of s.pts) { pt[0] += dx; pt[1] += dy; } }
+  function segDist(p, a, b) {
+    const vx = b[0] - a[0], vy = b[1] - a[1], L = vx * vx + vy * vy;
+    const t = L ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L)) : 0;
+    return Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy);
+  }
+  function eraseAt(w) {
+    const strokes = pad.page.strokes;
+    let hit = false;
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      const pts = strokes[i].pts;
+      const touched = pts.length === 1 ? Math.hypot(pts[0][0] - w[0], pts[0][1] - w[1]) < ERASE_R
+        : pts.some((pt, k) => k > 0 && segDist(w, pts[k - 1], pt) < ERASE_R);
+      if (touched) { pad.erased.push({ s: strokes[i], i }); strokes.splice(i, 1); hit = true; }
+    }
+    if (hit) redrawPad();
+  }
+  function inPoly(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function boxOf(list) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of list) for (const [x, y] of s.pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    return [x0 - 10, y0 - 10, x1 + 10, y1 + 10];
+  }
+  function inBox(w, b) { return w[0] >= b[0] && w[0] <= b[2] && w[1] >= b[1] && w[1] <= b[3]; }
+  function selectInLasso() {
+    const poly = pad.lasso;
+    pad.sel = null;
+    if (!poly || poly.length < 3) return;
+    // 선의 점 중 절반 이상이 올가미 안에 있으면 고른 것으로 봄
+    const picked = pad.page.strokes.filter(s => s.pts.filter(pt => inPoly(pt, poly)).length >= Math.ceil(s.pts.length / 2));
+    if (picked.length) pad.sel = { strokes: picked, box: boxOf(picked) };
+  }
+
   function drawStroke(s, from) {
     const { ctx } = pad;
     ctx.save();
-    ctx.globalCompositeOperation = s.tool === 'erase' ? 'destination-out' : 'source-over';
+    ctx.translate(-pad.page.ox, -pad.page.oy);
     ctx.strokeStyle = ctx.fillStyle = s.tool === 'red' ? cssVar('--pen') : cssVar('--ink');
-    ctx.lineWidth = s.tool === 'erase' ? 24 : 2.6;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = PEN_W; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const p = s.pts;
-    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); }
+    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], PEN_W / 2, 0, Math.PI * 2); ctx.fill(); }
     else {
+      const a = Math.max(0, from);
       ctx.beginPath();
-      ctx.moveTo(p[Math.max(0, from)][0], p[Math.max(0, from)][1]);
-      for (let i = Math.max(1, from + 1); i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.moveTo(p[a][0], p[a][1]);
+      for (let i = a + 1; i < p.length; i++) ctx.lineTo(p[i][0], p[i][1]);
       ctx.stroke();
     }
     ctx.restore();
   }
   function redrawPad() {
-    const { ctx, canvas } = pad;
+    const { ctx, canvas, page } = pad;
+    if (!page) return;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore();
-    for (const s of pad.strokes) drawStroke(s, 0);
-    pad.hint.hidden = pad.strokes.length > 0;
+    // 모눈: 화면을 옮기면 같이 움직여서 옮겨진 것이 보이게
+    ctx.save();
+    ctx.strokeStyle = cssVar('--grid'); ctx.lineWidth = 1;
+    ctx.beginPath();
+    const offX = -(((page.ox % GRID) + GRID) % GRID), offY = -(((page.oy % GRID) + GRID) % GRID);
+    for (let x = offX; x <= pad.w; x += GRID) { ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, pad.h); }
+    for (let y = offY; y <= pad.h; y += GRID) { ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(pad.w, Math.round(y) + 0.5); }
+    ctx.stroke();
+    ctx.restore();
+    for (const s of page.strokes) drawStroke(s, 0);
+    ctx.save();
+    ctx.translate(-page.ox, -page.oy);
+    ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = cssVar('--sel');
+    if (pad.lasso && pad.lasso.length > 1) {
+      ctx.beginPath(); ctx.moveTo(pad.lasso[0][0], pad.lasso[0][1]);
+      for (const [x, y] of pad.lasso) ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    if (pad.sel) {
+      const [x0, y0, x1, y1] = pad.sel.box;
+      ctx.fillStyle = cssVar('--sel-soft'); ctx.globalAlpha = 0.35; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.globalAlpha = 1;
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    }
+    ctx.restore();
+    pad.hint.hidden = page.strokes.length > 0 || !!pad.lasso;
   }
   function sizePad() {
     const r = pad.canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (!r.width || !r.height) return;
+    if (r.width === pad.w && r.height === pad.h && dpr === pad.dpr) return;
+    pad.w = r.width; pad.h = r.height; pad.dpr = dpr;
     pad.canvas.width = Math.round(r.width * dpr); pad.canvas.height = Math.round(r.height * dpr);
     pad.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawPad();
+  }
+  function undoPad() {
+    const page = pad.page, a = page.hist.pop();
+    if (!a) return;
+    if (a.t === 'add') { const i = page.strokes.indexOf(a.s); if (i >= 0) page.strokes.splice(i, 1); }
+    else if (a.t === 'erase') { for (const it of a.items.slice().sort((x, y) => x.i - y.i)) page.strokes.splice(Math.min(it.i, page.strokes.length), 0, it.s); }
+    else if (a.t === 'move') shiftStrokes(a.ss, -a.dx, -a.dy);
+    else if (a.t === 'clear') page.strokes.splice(0, page.strokes.length, ...a.prev);
+    pad.sel = null;
+    redrawPad();
+  }
+  function clearPad() {
+    const page = pad.page;
+    if (!page.strokes.length) return;
+    page.hist.push({ t: 'clear', prev: page.strokes.slice() });
+    page.strokes.length = 0; pad.sel = null;
+    redrawPad();
+  }
+  function setTool(t) {
+    pad.tool = t; pad.sel = null; pad.lasso = null;
+    pad.sheet.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
     redrawPad();
   }
   function openScratch() {
     const q = deck.at(idx);
     if (!q) return;
     if (!pad) buildPad();
-    if (!scratchStore.has(q.src)) scratchStore.set(q.src, []);
-    pad.strokes = scratchStore.get(q.src);
+    if (!scratchStore.has(q.src)) scratchStore.set(q.src, { strokes: [], ox: 0, oy: 0, hist: [] });
+    pad.page = scratchStore.get(q.src);
+    pad.sel = null; pad.lasso = null; pad.mode = null; pad.pointers.clear();
     pad.qEl.innerHTML = `<strong>${idx + 1}.</strong> ${q.q}${q.type === 'mc' ? `<ol>${q.choices.map((c, i) => `<li>${LABELS.at(i)} ${c}</li>`).join('')}</ol>` : ''}`;
     pad.back.hidden = false; pad.sheet.hidden = false;
     document.body.classList.add('sheet-open');
-    sizePad();
+    pad.w = 0; sizePad();
     typeset(pad.qEl);
     pad.sheet.querySelector('.close').focus({ preventScroll: true });
   }
   function closeScratch() {
     if (!pad || pad.sheet.hidden) return;
-    pad.back.hidden = true; pad.sheet.hidden = true; pad.cur = null;
+    pad.back.hidden = true; pad.sheet.hidden = true; pad.mode = null; pad.cur = null; pad.pointers.clear();
     document.body.classList.remove('sheet-open');
     const b = $('.scratch-btn'); if (b) b.focus({ preventScroll: true });
   }
@@ -347,21 +579,50 @@
   }
   function typeset(el) { if (CFG.math && window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise([el]).catch(() => {}); }
 
+  function dueInfo(due) {
+    if (!due) return '';
+    const days = Math.round((toUTC(due) - toUTC(kstToday())) / 864e5);
+    const tag = days > 0 ? `D-${days}` : days === 0 ? '오늘 마감' : '마감 지남';
+    return `<span class="badge${days < 0 ? ' late' : ''}">${tag}</span> 마감 ${periodLabelDay(due)}`;
+  }
+  function periodLabelDay(d) { return `${md(d)} (${'일월화수목금토'[new Date(toUTC(d)).getUTCDay()]})`; }
+  function renderHwPicker() {
+    const s = hwSet();
+    if (!s) { $('#picker').innerHTML = '<p class="empty">아직 올라온 숙제가 없어요. 선생님이 숙제를 올리면 여기에 나와요.</p>'; return; }
+    $('#picker').innerHTML = `
+      ${HW_SETS.length > 1 ? `<div class="chips">${HW_SETS.map(x => `<button class="chip" type="button" data-set="${esc(x.id)}" aria-pressed="${x.id === hwId}">${esc(x.label || x.title)}</button>`).join('')}</div>` : ''}
+      <div class="hw-info">
+        <strong class="hw-title">${esc(s.title)}</strong>
+        <span class="hw-due">${dueInfo(s.due)}</span>
+        ${s.note ? `<p class="hw-note">${esc(s.note)}</p>` : ''}
+      </div>`;
+  }
   function renderPicker() {
+    if (HW) { renderHwPicker(); return; }
     const tracks = Object.keys(TRACK_LABEL).filter(t => (DATA[t] || []).length);
     $('#picker').innerHTML = `
       <div class="pick-row"><span class="lbl">학년</span><strong>${GRADE_LABEL[CFG.grade]}</strong><a href="index.html">다른 학년 고르기</a></div>
-      <div class="pick-row"><span class="lbl">과정</span>
+      ${tracks.length > 1 ? `<div class="pick-row"><span class="lbl">과정</span>
         <div class="seg track">${tracks.map(t => `<button type="button" data-track="${t}" aria-pressed="${t === track}">${TRACK_LABEL[t]} <span class="n">${DATA[t].length}</span></button>`).join('')}</div>
-      </div>`;
+      </div>` : ''}`;
   }
   function renderTabs() {
+    if (HW) { $('#tabs').innerHTML = ''; return; }
     const wrong = new Set(load('wrong', []));
     const wrongN = [...pool().keys()].filter(i => wrong.has(`${poolKey()}#${i}`)).length;
     const tabs = [['period', `${PERIOD_NAME} 퀴즈`, periodSize()], ['practice', '연습', pool().length], ['wrong', '오답노트', wrongN]];
     $('#tabs').innerHTML = tabs.map(([k, name, n]) => `<button class="chip" type="button" data-tab="${k}" aria-pressed="${k === tab}">${name}<span class="n">${n}</span></button>`).join('');
   }
   function renderDay() {
+    if (HW) {
+      if (!deck.length) { $('#day').innerHTML = ''; return; }
+      const answered = deck.filter((_, i) => results.at(i)).length;
+      const right = results.filter(r => r && r.correct).length;
+      $('#day').innerHTML = `<span class="date">진행 ${answered} / ${deck.length}</span>
+        ${answered ? `<span class="badge">맞힌 문제 ${right}</span>` : ''}
+        <p class="sub">${retrying ? '틀린 문제만 다시 푸는 중이에요. 제출 기록은 바뀌지 않아요.' : '번호를 누르면 그 문제로 이동해요. 푼 곳까지 저장돼서 나중에 이어서 풀 수 있어요.'}</p>`;
+      return;
+    }
     const who = `${GRADE_LABEL[CFG.grade]} · ${TRACK_LABEL[track]}`;
     if (tab === 'period') {
       const done = doneMap()[`${poolKey()}|${view}`];
@@ -382,14 +643,17 @@
   function renderDots() {
     $('#dots').innerHTML = deck.map((_, i) => {
       const r = results.at(i);
-      return `<span class="dot ${r ? (r.correct ? 'ok' : 'no') : (i === idx ? 'now' : '')}">${i + 1}</span>`;
+      const cls = `dot ${r ? (r.correct ? 'ok' : 'no') : ''}${i === idx ? ' now' : ''}`;
+      // 숙제는 번호를 눌러 문제를 옮겨 다닐 수 있음
+      return HW ? `<button class="${cls}" type="button" data-goto="${i}" aria-label="${i + 1}번 문제${r ? (r.correct ? ' (맞음)' : ' (틀림)') : ''}">${i + 1}</button>`
+        : `<span class="${cls}">${i + 1}</span>`;
     }).join('');
   }
   function renderStage() {
     renderDots();
     const stage = $('#stage');
     if (!deck.length) {
-      stage.innerHTML = `<div class="card"><p class="empty">${tab === 'wrong' ? '오답노트가 비어 있어요. 문제를 풀다 틀리면 여기에 모입니다.' : '아직 이 과정에 문제가 없어요.'}</p></div>`;
+      stage.innerHTML = HW ? '' : `<div class="card"><p class="empty">${tab === 'wrong' ? '오답노트가 비어 있어요. 문제를 풀다 틀리면 여기에 모입니다.' : '아직 이 과정에 문제가 없어요.'}</p></div>`;
       return;
     }
     stage.innerHTML = idx < deck.length ? questionHTML(deck.at(idx)) : summaryHTML();
@@ -416,17 +680,28 @@
         const mini = q.sayChoices && CAN_SPEAK ? `<button class="say-mini" type="button" data-say="${esc(q.sayChoices.at(i))}" aria-label="${LABELS.at(i)} 발음 듣기">${SPEAKER}</button>` : '';
         return `<li><button class="choice ${cls}" type="button" data-pick="${i}" ${done ? 'disabled' : ''}><span class="lab">${LABELS.at(i)}${m}</span><span>${c}</span></button>${mini}</li>`;
       }).join('')}</ol>`;
+    } else if (q.type === 'open') {
+      // 서술형: 풀기 → 정답 확인 → 스스로 채점
+      const open = done || revealed.has(q.src);
+      body = !open
+        ? `<div class="open-box"><p class="hint">연습장이나 공책에 풀어 본 뒤 정답을 확인하세요.</p><button class="btn" type="button" data-act="reveal">정답 확인</button></div>`
+        : `<div class="sol"><span class="k">정답</span>${q.answer}${q.sol ? `<span class="k" style="margin-top:10px">풀이</span>${q.sol}` : ''}</div>
+           ${done ? '' : `<div class="self-row"><span>내 풀이와 비교해 보세요.</span><button class="btn" type="button" data-self="right">맞았어요</button><button class="btn ghost" type="button" data-self="wrong">틀렸어요</button></div>`}`;
     } else {
       body = `<form class="short" id="short-form">
-        <label for="short-answer" class="hint">답을 숫자로 입력하세요</label>
-        <input id="short-answer" inputmode="decimal" autocomplete="off" ${done ? `value="${esc(res.picked)}" disabled` : ''}>
-        ${done ? '' : '<button class="btn ghost" type="button" data-act="neg" aria-label="음수 부호 넣기/빼기">±</button><button class="btn" type="submit">확인</button>'}
+        <label for="short-answer" class="hint">${q.text ? '답을 입력하세요' : '답을 숫자로 입력하세요'}</label>
+        <input id="short-answer" ${q.text ? 'autocapitalize="off" spellcheck="false"' : 'inputmode="decimal"'} autocomplete="off" ${done ? `value="${esc(res.picked)}" disabled` : ''}>
+        ${done ? '' : `${q.text ? '' : '<button class="btn ghost" type="button" data-act="neg" aria-label="음수 부호 넣기/빼기">±</button>'}<button class="btn" type="submit">확인</button>`}
       </form>`;
     }
     const last = idx === deck.length - 1;
+    const answerText = q.type === 'mc' ? LABELS.at(q.ans) : [].concat(q.ans).join(' 또는 ');
+    const verdict = q.type === 'open'
+      ? (res && res.correct ? '맞았어요!' : '다음엔 맞힐 수 있어요.')
+      : (res && res.correct ? '정답이에요!' : `아쉬워요. 정답은 ${answerText}`);
     const feedback = done ? `
-      <p class="verdict ${res.correct ? 'ok' : ''}" role="status">${res.correct ? '정답이에요!' : `아쉬워요. 정답은 ${q.type === 'mc' ? LABELS.at(q.ans) : q.ans}`}</p>
-      <div class="sol"><span class="k">해설</span>${q.sol}</div>
+      <p class="verdict ${res.correct ? 'ok' : ''}" role="status">${verdict}</p>
+      ${q.type === 'open' ? '' : `<div class="sol"><span class="k">해설</span>${q.sol || '해설이 없어요.'}</div>`}
       <div class="row">${q.sayAfter ? sayButton(q.sayAfter, q.sayLabel) : ''}<button class="btn" type="button" data-act="next" id="next-btn">${last ? '결과 보기' : '다음 문제 →'}</button></div>` : '';
     const meta = [q.cat ? `<span>${esc(q.cat)}</span>` : '', q.unit ? `<span>${q.cat ? '· ' : ''}${esc(q.unit)}</span>` : '',
       `<span class="tag${track === 'bible' ? ' bible' : ''}">${esc(q.kind)}</span>`].join('');
@@ -441,7 +716,59 @@
     </article>`;
   }
 
+  // 숙제 결과(제출) 화면
+  function hwSummaryHTML() {
+    const s = hwSet();
+    const total = deck.length;
+    const todo = deck.map((_, i) => i).filter(i => !results.at(i));
+    if (todo.length && !retrying) {
+      return `<article class="card">
+        <p class="verdict">아직 안 푼 문제가 ${todo.length}개 있어요.</p>
+        <p class="empty">${todo.map(i => i + 1).join(', ')}번</p>
+        <div class="row"><button class="btn" type="button" data-goto="${todo[0]}">${todo[0] + 1}번부터 풀기</button></div>
+      </article>`;
+    }
+    if (retrying) {
+      const right = results.filter(r => r && r.correct).length;
+      return `<article class="card">
+        <div class="score"><span class="big">${right} / ${total}${mark('ok')}</span><p>틀린 문제 다시 풀기를 마쳤어요. 제출 기록은 처음 결과 그대로예요.</p></div>
+        <div class="row"><button class="btn" type="button" data-act="hw-back">제출 화면으로</button></div>
+      </article>`;
+    }
+    const right = results.filter(r => r && r.correct).length;
+    const wrongNums = deck.map((_, i) => i).filter(i => !results.at(i).correct).map(i => i + 1);
+    const at = (load('done', {})[hwId] || {}).at;
+    const when = at ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at)) : '';
+    const name = load('name', '');
+    return `<article class="card submit-card">
+      <div class="score"><span class="big">${right} / ${total}${mark('ok')}</span><p>숙제를 다 풀었어요. 아래 결과를 선생님께 보내 주세요.</p></div>
+      <div class="submit-sheet" id="submit-sheet">
+        <div class="submit-row"><span class="k">숙제</span><span>${esc(s.title)}</span></div>
+        <div class="submit-row"><label class="k" for="hw-name">이름</label><input id="hw-name" autocomplete="name" placeholder="이름을 적어 주세요" value="${esc(name)}"></div>
+        <div class="submit-row"><span class="k">점수</span><span>${right} / ${total}</span></div>
+        <div class="submit-row"><span class="k">완료</span><span>${when}</span></div>
+        <div class="ox-grid" aria-label="문제별 결과">${deck.map((_, i) => `<span class="${results.at(i).correct ? 'o' : 'x'}">${i + 1}</span>`).join('')}</div>
+      </div>
+      <div class="row">
+        ${wrongNums.length ? '<button class="btn ghost" type="button" data-act="retry-wrong">틀린 문제만 다시</button>' : ''}
+        <button class="btn" type="button" data-act="copy">결과 복사</button>
+      </div>
+      <p class="copy-msg" id="copy-msg" role="status"></p>
+      <textarea class="copy-fallback" id="copy-fallback" hidden readonly aria-label="복사할 결과"></textarea>
+      <div class="row"><button class="btn ghost" type="button" data-act="hw-reset">처음부터 다시 풀기</button></div>
+    </article>`;
+  }
+  function hwResultText() {
+    const s = hwSet();
+    const right = results.filter(r => r && r.correct).length;
+    const wrongNums = deck.map((_, i) => i).filter(i => results.at(i) && !results.at(i).correct).map(i => i + 1);
+    const at = (load('done', {})[hwId] || {}).at;
+    const when = at ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(at)) : '';
+    return `[이레 숙제] ${s.title}\n이름: ${load('name', '') || '(이름 없음)'}\n점수: ${right} / ${deck.length}\n완료: ${when}\n틀린 문제: ${wrongNums.length ? wrongNums.join(', ') + '번' : '없음'}`;
+  }
+
   function summaryHTML() {
+    if (HW) return hwSummaryHTML();
     const total = deck.length;
     const right = results.filter(r => r && r.correct).length;
     const wrongQs = deck.filter((_, i) => !(results.at(i) && results.at(i).correct));
@@ -461,13 +788,29 @@
     const q = deck.at(idx);
     if (!q || results.at(idx)) return;
     let correct, picked;
+    const norm = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?]$/, '');
     if (q.type === 'mc') { picked = value; correct = value === q.ans; }
+    else if (q.type === 'open') { picked = value; correct = value === 'right'; }
     else {
       picked = String(value).trim();
       if (!picked) return;
-      correct = Number(picked.replace(/,/g, '')) === q.ans;
+      correct = q.text
+        ? [].concat(q.ans).some(a => norm(a) === norm(picked))
+        : Number(picked.replace(/,/g, '')) === q.ans;
     }
     results[idx] = { correct, picked };
+    if (HW) {
+      // 처음으로 모든 문제를 끝낸 시각을 기록 (제출 화면에 표시)
+      const done = load('done', {});
+      if (!retrying && deck.every((_, i) => results.at(i)) && !done[hwId]) {
+        done[hwId] = { at: new Date().toISOString() };
+        save('done', done);
+      }
+      stash();
+      renderDay(); renderStage();
+      const nb = $('#next-btn'); if (nb) nb.focus({ preventScroll: true });
+      return;
+    }
     const wrong = new Set(load('wrong', []));
     correct ? wrong.delete(q.src) : wrong.add(q.src);
     save('wrong', [...wrong]);
@@ -482,20 +825,56 @@
   }
   function next() { stopSpeech(); closeScratch(); idx += 1; stash(); renderStage(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
+  // 숙제 모드 전용 버튼들. 처리했으면 true
+  let resetArmed = false;
+  function hwClick(e, act) {
+    const setBtn = e.target.closest('[data-set]');
+    if (setBtn) {
+      if (setBtn.dataset.set !== hwId) { stopSpeech(); closeScratch(); hwId = setBtn.dataset.set; save('set', hwId); start(); }
+      return true;
+    }
+    const go = e.target.closest('[data-goto]');
+    if (go) {
+      stopSpeech(); closeScratch(); resetArmed = false;
+      idx = Number(go.dataset.goto); stash(); renderStage();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return true;
+    }
+    const self = e.target.closest('[data-self]');
+    if (self) { answer(self.dataset.self); return true; }
+    if (act === 'reveal') { revealed.add(deck.at(idx).src); renderStage(); return true; }
+    if (act === 'hw-back') { start(); return true; }
+    if (act === 'copy') {
+      const nameEl = $('#hw-name'); if (nameEl) save('name', nameEl.value.trim());
+      const text = hwResultText(), msg = $('#copy-msg'), box = $('#copy-fallback');
+      const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); msg.textContent = '아래 글을 길게 눌러 복사한 뒤 카톡에 붙여 넣어 주세요.'; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => { msg.textContent = '복사했어요. 카톡에 붙여 넣어 선생님께 보내 주세요.'; }, fallback);
+      } else fallback();
+      return true;
+    }
+    if (act === 'hw-reset') {
+      // 기록을 지우는 버튼이라 한 번 더 눌러야 실행
+      const btn = e.target.closest('[data-act]');
+      if (!resetArmed) { resetArmed = true; btn.textContent = '한 번 더 누르면 푼 기록이 지워져요'; return true; }
+      resetArmed = false; start(true); return true;
+    }
+    return false;
+  }
+  document.addEventListener('input', e => { if (HW && e.target.id === 'hw-name') save('name', e.target.value.trim()); });
+
   document.addEventListener('click', e => {
     const tool = e.target.closest('[data-tool]');
-    if (tool && pad) {
-      pad.tool = tool.dataset.tool;
-      pad.sheet.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b === tool)));
-      return;
-    }
+    if (tool && pad) { setTool(tool.dataset.tool); return; }
     const sa = e.target.closest('[data-act]') && e.target.closest('[data-act]').dataset.act;
     if (sa === 'scratch') { openScratch(); return; }
     if (sa === 'scratch-close') { closeScratch(); return; }
-    if (sa === 'scratch-undo') { if (pad) { pad.strokes.pop(); redrawPad(); } return; }
-    if (sa === 'scratch-clear') { if (pad) { pad.strokes.length = 0; redrawPad(); } return; }
+    if (sa === 'scratch-undo') { if (pad) undoPad(); return; }
+    if (sa === 'scratch-clear') { if (pad) clearPad(); return; }
+    if (sa === 'scratch-home') { if (pad) { pad.page.ox = 0; pad.page.oy = 0; redrawPad(); } return; }
     const say = e.target.closest('[data-say]');
     if (say) { speak(say.dataset.say, say); return; }
+    if (HW && hwClick(e, sa)) return;
     const tr = e.target.closest('[data-track]');
     if (tr) {
       if (tr.dataset.track === track) return;
@@ -538,22 +917,23 @@
   });
 
   // 뼈대 그리기
-  document.title = `${CFG.title} ${GRADE_LABEL[CFG.grade]}`;
+  const heading = HW ? CFG.title : `${CFG.title} ${GRADE_LABEL[CFG.grade]}`;
+  document.title = heading;
   $('#app').innerHTML = `
     <header>
-      <a class="home" href="../index.html">← 이레 처음으로</a>
+      ${CFG.home === false ? '' : `<a class="home" href="${CFG.home || '../index.html'}">← 이레 처음으로</a>`}
       <span class="eyebrow">${CFG.eyebrow || ''}</span>
-      <h1>${CFG.title} ${GRADE_LABEL[CFG.grade]}</h1>
+      <h1>${heading}</h1>
       <p class="lead">${CFG.lead || ''}</p>
     </header>
-    <section class="picker" id="picker" aria-label="학년과 과정"></section>
+    <section class="picker" id="picker" aria-label="${HW ? '숙제 정보' : '학년과 과정'}"></section>
     <nav class="chips" id="tabs" aria-label="퀴즈 종류"></nav>
     <section class="day" id="day" aria-live="polite"></section>
-    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="dots" id="dots" ${HW ? 'role="navigation" aria-label="문제 번호"' : 'aria-hidden="true"'}></div>
     <main id="stage"></main>
     <footer>${CFG.footer || ''}</footer>`;
   window.IRAE_READY = () => typeset($('#stage'));
   // 점검용: 문제 하나를 만들어 보거나 과정을 바꿔 봄
-  window.IRAE_DEBUG = { build: (t, i) => { const keep = track; track = t; const q = build(pool()[i], i, Math.random); track = keep; return q; }, periodDeck: (t, p) => { const keep = track; track = t; const d = periodDeck(p); track = keep; return d; } };
+  window.IRAE_DEBUG = { pad: () => pad, build: (t, i) => { const keep = track; track = t; const q = build(pool()[i], i, Math.random); track = keep; return q; }, periodDeck: (t, p) => { const keep = track; track = t; const d = periodDeck(p); track = keep; return d; } };
   start();
 })();

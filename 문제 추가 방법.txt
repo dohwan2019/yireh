@@ -8,6 +8,11 @@
   data/math-e1.js ...     학년별 문제 파일  ← 문제는 여기만 고치면 됩니다
   assets/quiz.js          퀴즈 프로그램 (모든 학년이 함께 씀)
   assets/quiz.css         디자인
+  manifest.webmanifest, sw.js, icons/   휴대폰 앱(PWA) 설정 — 고치지 마세요
+
+[문제 파일만 직접 고쳐서 올렸을 때]
+  학생 화면에는 보통 10분 안에 반영됩니다.
+  바로 반영되게 하려면 Claude에게 "다시 빌드해줘"라고 하면 버전 번호를 새로 붙여 줍니다.
 
 [학생에게 줄 주소 예시]
   https://아이디.github.io/yireh/                 첫 화면

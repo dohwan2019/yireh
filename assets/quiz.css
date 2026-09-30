@@ -200,13 +200,39 @@ mjx-container{color:inherit}
 .sheet-q ol{margin:6px 0 0; padding-left:0; list-style:none; display:flex; flex-wrap:wrap; gap:4px 14px; color:var(--muted)}
 .pad-wrap{position:relative; flex:1; min-height:0}
 .pad{
+  /* 모눈은 캔버스에 직접 그려서 화면을 옮기면 같이 움직임 */
   position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; display:block;
   background-color:var(--card);
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:24px 24px;
 }
-.pad-hint{position:absolute; left:0; right:0; top:40%; text-align:center; color:var(--muted); font-size:14px; pointer-events:none}
+.tool-group{display:flex; gap:6px; flex-wrap:wrap}
+.pad-hint{position:absolute; left:0; right:0; top:40%; margin:0; text-align:center; color:var(--muted); font-size:14px; line-height:1.7; pointer-events:none}
 body.sheet-open{overflow:hidden; overscroll-behavior:none; -webkit-user-select:none; user-select:none}
+
+/* 숙제 */
+.hw-info{display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px}
+.hw-title{font-size:19px; flex-basis:100%}
+.hw-due{font-size:14px; color:var(--muted); display:inline-flex; align-items:center; gap:8px}
+.badge.late{border-color:var(--muted); color:var(--muted)}
+.hw-note{margin:0; flex-basis:100%; color:var(--muted); font-size:15px}
+button.dot{font:inherit; font-size:12px; cursor:pointer; padding:0}
+button.dot.now{outline:2px solid var(--sel); outline-offset:2px}
+.q-img{display:block; max-width:100%; height:auto; margin-top:12px; border:1px solid var(--line); border-radius:10px; background:#fff}
+.sheet-q .q-img{max-height:140px; width:auto}
+.open-box{display:flex; flex-direction:column; align-items:flex-start; gap:10px; border:1px dashed var(--line); border-radius:10px; padding:14px 16px}
+.open-box .hint{margin:0; color:var(--muted); font-size:14px}
+.self-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+.self-row span{margin-right:auto; color:var(--muted); font-size:14px}
+.submit-sheet{border:1px solid var(--line); border-radius:12px; padding:14px 16px; display:grid; gap:10px; background:var(--paper)}
+.submit-row{display:flex; align-items:center; gap:12px; font-size:15px}
+.submit-row .k{width:40px; flex:none; font-size:13px; color:var(--muted); font-weight:600}
+.submit-row input{font:inherit; flex:1; min-width:0; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink)}
+.ox-grid{display:grid; grid-template-columns:repeat(10, 1fr); gap:4px}
+.ox-grid span{position:relative; text-align:center; font-size:12px; padding:4px 0; border-radius:6px; font-variant-numeric:tabular-nums; border:1px solid var(--line); background:var(--card)}
+.ox-grid .o{border-color:var(--pen); color:var(--pen); font-weight:600}
+.ox-grid .x{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--pen)}
+.copy-msg{margin:0; font-size:14px; color:var(--sel); text-align:right; min-height:1em}
+.copy-fallback{width:100%; min-height:120px; font:inherit; font-size:14px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink)}
+@media (max-width:420px){ .ox-grid{grid-template-columns:repeat(5, 1fr)} }
 
 /* 첫 화면 */
 .subjects{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px}
